@@ -1,0 +1,12 @@
+프론트를 5173에서 실행해줘
+API 서버를 3000에서 실행해줘(api-dev 간편서버) - PayloadTooLargeError 해결됨(50mb 제한)
+이제 브라우저에서 열어줘
+상태 확인/문제 해결
+5173/3000 포트 리스닝 상태 확인해줘
+5173 포트 점유 프로세스 찾아서 종료해줘
+프록시(/api) 연결이 왜 실패하는지 확인해줘
+콘솔/네트워크 에러 확인해서 고쳐줘
+PayloadTooLargeError 발생시: dev-api-server.mjs에서 express.json({ limit: '50mb' }) 설정
+5174로 프론트 재기동해줘
+필수 팁
+Windows에서는 ‘| cat’ 같은 유닉스 파이프 쓰지 말아 주세요.

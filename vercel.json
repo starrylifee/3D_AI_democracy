@@ -1,0 +1,15 @@
+{
+    "version": 2,
+    "functions": {
+        "api/*.ts": {
+            "runtime": "nodejs18.x"
+        }
+    },
+    "buildCommand": "npm run build",
+    "outputDirectory": "dist",
+    "rewrites": [
+        { "source": "/api/(.*)", "destination": "/api/$1" },
+        { "source": "/((?!api).*)", "destination": "/index.html" }
+    ]
+}
+
