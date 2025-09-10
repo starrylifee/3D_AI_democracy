@@ -48,8 +48,8 @@ const initialIssues: Record<string, Issue> = {
         title: '반려동물 갈등 (동쪽)',
         councilor: { id: 'councilor_pet', name: '이 민원', emoji: '🐾', color: 0xffd700, pos: new THREE.Vector3(35, 0, 0), persona: "당신은 '이 민원' 시의원입니다. 반려동물 공원 문제로 주민 갈등이 심각하여 고심이 깊습니다. 반려인과 비반려인 모두를 위한 해결책을 모색하고 있습니다. 신중하고 공감하는 태도로 대화하세요.", initialRequest: '반려동물 공원 문제, 어떻게 하면 모두가 만족할 수 있을까요?' },
         citizens: [
-            { id: 'pet_owner', name: '강아지 사랑', role: '반려견주', emoji: '🐶', color: 0xf6ad55, pos: new THREE.Vector3(45, 0, -15), persona: '강아지가 마음껏 뛰어놀 공간이 없어 안타깝습니다.', initialRequest: '우리 강아지가 마음껏 뛰어놀 수 있는 반려동물 공원을 만들어주세요.' },
-            { id: 'resident', name: '조용한 주민', role: '인근 주민', emoji: '🏡', color: 0x68d391, pos: new THREE.Vector3(45, 0, 15), persona: '개 짖는 소음과 배설물 문제로 스트레스가 많습니다.', initialRequest: '공원에 개들이 짖고 배설물도 너무 많아요. 조용한 공원을 돌려주세요.' },
+            { id: 'pet_owner', name: '강아지 사랑', role: '반려견주', emoji: '🐶', color: 0xf6ad55, pos: new THREE.Vector3(45, 0, -5), persona: '강아지가 마음껏 뛰어놀 공간이 없어 안타깝습니다.', initialRequest: '우리 강아지가 마음껏 뛰어놀 수 있는 반려동물 공원을 만들어주세요.' },
+            { id: 'resident', name: '조용한 주민', role: '인근 주민', emoji: '🏡', color: 0x68d391, pos: new THREE.Vector3(45, 0, 5), persona: '개 짖는 소음과 배설물 문제로 스트레스가 많습니다.', initialRequest: '공원에 개들이 짖고 배설물도 너무 많아요. 조용한 공원을 돌려주세요.' },
             { id: 'non_pet_owner', name: '아이 엄마', role: '비반려인', emoji: '👩‍👧', color: 0xf687b3, pos: new THREE.Vector3(25, 0, -10), persona: '아이들의 안전이 최우선입니다.', initialRequest: '목줄 풀린 개들 때문에 아이들이 불안에 떨고 있어요. 안전 대책이 시급합니다.' },
             { id: 'vet', name: '박 수의사', role: '수의사', emoji: '🩺', color: 0x9f7aea, pos: new THREE.Vector3(25, 0, 10), persona: '반려인 교육과 공간 분리가 필요합니다.', initialRequest: '반려동물과 사람이 함께 행복할 수 있는 규칙과 공간이 필요합니다.' },
         ],
@@ -68,8 +68,8 @@ const initialIssues: Record<string, Issue> = {
         title: '쓰레기 무단 투기 (서쪽)',
         councilor: { id: 'councilor_trash', name: '최 환경', emoji: '🗑️', color: 0xffd700, pos: new THREE.Vector3(-35, 0, 0), persona: '강력한 단속과 의식 개선이 필요합니다.', initialRequest: '깨끗한 도시를 위해 쓰레기 무단 투기 문제를 해결할 좋은 방법이 없을까요?' },
         citizens: [
-            { id: 'cleaner', name: '환경미화원', role: '환경미화원', emoji: '🧹', color: 0xf6ad55, pos: new THREE.Vector3(-45, 0, -15), persona: '분리수거 미이행이 심각합니다.', initialRequest: '분리수거도 안 된 쓰레기들 때문에 일이 몇 배는 힘들어졌어요. 무단 투기를 막을 방법이 필요합니다.' },
-            { id: 'villa_resident', name: '빌라 주민', role: '빌라 주민', emoji: '🏘️', color: 0x68d391, pos: new THREE.Vector3(-45, 0, 15), persona: '종량제 봉투 지원이 필요합니다.', initialRequest: '종량제 봉투 값이 너무 비싸서 그런지 자꾸 쓰레기를 몰래 버리는 사람이 있어요.' },
+            { id: 'cleaner', name: '환경미화원', role: '환경미화원', emoji: '🧹', color: 0xf6ad55, pos: new THREE.Vector3(-45, 0, -5), persona: '분리수거 미이행이 심각합니다.', initialRequest: '분리수거도 안 된 쓰레기들 때문에 일이 몇 배는 힘들어졌어요. 무단 투기를 막을 방법이 필요합니다.' },
+            { id: 'villa_resident', name: '빌라 주민', role: '빌라 주민', emoji: '🏘️', color: 0x68d391, pos: new THREE.Vector3(-45, 0, 5), persona: '종량제 봉투 지원이 필요합니다.', initialRequest: '종량제 봉투 값이 너무 비싸서 그런지 자꾸 쓰레기를 몰래 버리는 사람이 있어요.' },
             { id: 'restaurant_owner', name: '식당 사장', role: '음식점 주인', emoji: '🍽️', color: 0xf687b3, pos: new THREE.Vector3(-25, 0, -10), persona: 'CCTV 설치 지원을 원합니다.', initialRequest: '가게 앞에 누가 자꾸 쓰레기를 버리고 가서 골치가 아파요. CCTV라도 달아야 할 판입니다.' },
             { id: 'office_worker', name: '직장인', role: '1인 가구 직장인', emoji: '🧑‍💼', color: 0x9f7aea, pos: new THREE.Vector3(-25, 0, 10), persona: '상시 수거 시스템이 필요합니다.', initialRequest: '쓰레기 버리는 날짜와 시간이 정해져 있으니 바쁜 직장인들은 맞추기가 너무 힘들어요.' },
         ],
