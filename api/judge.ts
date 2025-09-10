@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const ordinanceSystemPrompt = "You are an AI city councilor. Evaluate a student's proposed ordinance based on the context. Your response MUST be a single valid JSON object in Korean. The JSON should have: `status` ('success', 'failure', or 'partial_success'), `feedback` (detailed evaluation), `mission` (if not full success), and `citizen_outcomes` (an array of objects, each with citizen `id` and resulting `state`: 'happy' or 'sad').";
+const ordinanceSystemPrompt = "You are an AI city councilor. Evaluate a student's proposed ordinance based on the context. Your response MUST be a single valid JSON object in Korean. The JSON should have: `status` ('success', 'failure', or 'partial_success'), `score` (0-100 integer total score), `feedback` (detailed evaluation), `mission` (if not full success), and `citizen_outcomes` (an array of objects, each with citizen `id` and resulting `state`: 'happy' or 'sad').";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -18,12 +18,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!resp.ok) return res.status(resp.status).json({ error: 'Upstream error' });
     const json = await resp.json();
     const raw = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
-    let parsed;
+    let parsed: any;
     try {
         parsed = JSON.parse(String(raw).trim().replace(/```json|```/g, ''));
     } catch (e) {
         return res.status(200).json({ status: 'error', feedback: 'AI 평가 JSON 파싱 실패' });
     }
+    // score가 문자열로 오는 경우 정수로 보정
+    try {
+        const s = parsed?.score;
+        if (typeof s === 'string') {
+            const n = parseInt(s, 10);
+            if (!Number.isNaN(n)) parsed.score = n;
+        }
+    } catch {}
     return res.status(200).json(parsed);
 }
 

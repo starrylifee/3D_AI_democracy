@@ -504,6 +504,24 @@ export default function App() {
             html += `</ul><p id="quest-complete-notice-${key}" class="text-yellow-400 font-bold mt-2 hidden">모든 의견을 들었습니다! 담당 시의원을 찾아가세요.</p></div>`;
         });
         questLog.innerHTML = html;
+
+        // 로컬 저장된 진행도에 맞춰 초기 체크 표시 동기화
+        try {
+            const { questsCompleted: qc, issues: iss } = useSimStore.getState();
+            Object.entries(iss).forEach(([key, issue]) => {
+                const done = qc[key] ?? new Set<string>();
+                issue.citizens.forEach(c => {
+                    if (done.has(c.id)) {
+                        const li = document.getElementById(`quest-${c.id}`);
+                        if (li) li.innerHTML = `<span>✅</span> <span class="line-through text-gray-400">${c.name} (${c.role})</span>`;
+                    }
+                });
+                if (done.size >= 4) {
+                    const notice = document.getElementById(`quest-complete-notice-${key}`);
+                    notice?.classList.remove('hidden');
+                }
+            });
+        } catch {}
     }
 
     function createExclamationMarkTexture() {
@@ -606,14 +624,19 @@ export default function App() {
             modal?.classList.remove('hidden');
         } else {
             openChatModal(npc);
-            if (qc[issueKey] && !qc[issueKey].has(npc.id)) {
+            const already = Boolean(qc[issueKey] && qc[issueKey].has(npc.id));
+            if (!already) {
                 markDone(issueKey, npc.id);
-                const li = document.getElementById(`quest-${npc.id}`);
-                if (li) li.innerHTML = `<span>✅</span> <span class=\"line-through text-gray-400\">${npc.name} (${npc.role})</span>`;
-                if (qc[issueKey].size === 4) {
-                    const notice = document.getElementById(`quest-complete-notice-${issueKey}`);
-                    notice?.classList.remove('hidden');
-                }
+            }
+            // UI는 항상 최신 상태로 반영
+            const li = document.getElementById(`quest-${npc.id}`);
+            if (li) li.innerHTML = `<span>✅</span> <span class=\"line-through text-gray-400\">${npc.name} (${npc.role})</span>`;
+            // 완료 안내 표시 (추정 사이즈 계산)
+            const prevSize = qc[issueKey]?.size ?? 0;
+            const sizeAfter = already ? prevSize : prevSize + 1;
+            if (sizeAfter >= 4) {
+                const notice = document.getElementById(`quest-complete-notice-${issueKey}`);
+                notice?.classList.remove('hidden');
             }
         }
     }
@@ -762,26 +785,29 @@ export default function App() {
         } else {
             html = `<div class=\"bg-red-900 border-l-4 border-red-500 text-red-300 p-4 mb-4 rounded-r-lg\"><p class=\"font-bold text-xl\">오류 발생</p></div><p class=\"bg-gray-700 p-3 rounded\">${result.feedback}</p>`;
         }
-        if (typeof result.score === 'number') {
-            const issueKey = currentOrdinanceIssue as string | null;
-            const score = result.score as number;
-            let badgeRow = '';
-            if (issueKey) {
-                if (score >= 80) {
-                    try {
-                        addBadge(`${issueKey}_badge`);
-                        const toast = document.createElement('div');
-                        toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-blue-700 text-white px-4 py-2 rounded shadow-lg z-50';
-                        toast.textContent = `배지 획득! ${issues[issueKey].title} (80점 이상)`;
-                        document.body.appendChild(toast);
-                        setTimeout(() => { toast.remove(); }, 2500);
-                    } catch {}
-                    badgeRow = `<div class=\"text-green-300\">배지 수여: 예</div>`;
-                } else {
-                    badgeRow = `<div class=\"text-yellow-300\">배지 수여: 기준 미달(80점)</div>`;
+        {
+            const sRaw = (result as any)?.score;
+            const score = typeof sRaw === 'number' ? sRaw : (typeof sRaw === 'string' ? parseInt(sRaw, 10) : NaN);
+            if (!Number.isNaN(score)) {
+                const issueKey = currentOrdinanceIssue as string | null;
+                let badgeRow = '';
+                if (issueKey) {
+                    if (score >= 80) {
+                        try {
+                            addBadge(`${issueKey}_badge`);
+                            const toast = document.createElement('div');
+                            toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-blue-700 text-white px-4 py-2 rounded shadow-lg z-50';
+                            toast.textContent = `배지 획득! ${issues[issueKey].title} (80점 이상)`;
+                            document.body.appendChild(toast);
+                            setTimeout(() => { toast.remove(); }, 2500);
+                        } catch {}
+                        badgeRow = `<div class=\"text-green-300\">배지 수여: 예</div>`;
+                    } else {
+                        badgeRow = `<div class=\"text-yellow-300\">배지 수여: 기준 미달(80점)</div>`;
+                    }
                 }
+                html = `<div class=\"mb-2 text-sm text-gray-300\">총점: <span class=\"font-bold text-blue-300\">${score}</span> / 100</div>${badgeRow}` + html;
             }
-            html = `<div class=\"mb-2 text-sm text-gray-300\">총점: <span class=\"font-bold text-blue-300\">${score}</span> / 100</div>${badgeRow}` + html;
         }
         if (result.mission && result.status !== 'failure') {
             html += `<div class=\"mt-4 bg-yellow-900 p-4 rounded-lg border border-yellow-600\"><p class=\"font-bold text-yellow-300\">&lt;남은 과제&gt;</p><p class=\"text-yellow-400\">${result.mission}</p></div>`;
