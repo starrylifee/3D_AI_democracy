@@ -278,26 +278,7 @@ export default function App() {
             return false;
         }
 
-        function updateZoneDebugOverlay() {
-            const panel = document.getElementById('zone-debug-panel') as HTMLDivElement | null;
-            if (!panel || panel.classList.contains('hidden')) return;
-            const state = useSimStore.getState();
-            const player = playerRef.current!;
-            const pz = getZoneForPosition(player.position) ?? '중앙';
-            let html = `<div class="text-sm text-gray-300">플레이어 존: <span class="font-bold text-blue-300">${pz}</span> (x:${player.position.x.toFixed(1)}, z:${player.position.z.toFixed(1)})</div>`;
-            html += '<div class="mt-2 max-h-56 overflow-y-auto space-y-1">';
-            Object.entries(state.issues).forEach(([issueKey, issue]) => {
-                const title = issue.title;
-                [...issue.citizens, issue.councilor].forEach(npc => {
-                    const npcZone = getZoneForPosition(npc.pos) ?? '중앙';
-                    const declared = issueKey;
-                    const mismatch = (npcZone !== declared);
-                    html += `<div class="${mismatch ? 'text-yellow-300' : 'text-gray-300'}">${npc.name} [선언:${declared}] / [위치:${npcZone}]</div>`;
-                });
-            });
-            html += '</div>';
-            panel.innerHTML = html;
-        }
+        // (removed) zone debug overlay
 
         function drawMiniMapBackground() {
             const container = miniMapRef.current as HTMLDivElement | null;
@@ -437,7 +418,6 @@ export default function App() {
                 }
             }
             mixersRef.current.forEach(mixer => mixer.update(delta));
-            updateZoneDebugOverlay();
             renderer.render(scene, camera);
         }
 
@@ -451,7 +431,13 @@ export default function App() {
         }
         window.addEventListener('resize', onResize);
         function onWheel(e: WheelEvent) {
-            // 카메라 줌: 스크롤로 근/원 변경
+            // 채팅/모달 열려있으면 카메라 줌 비활성화 (배경 락)
+            const chatOpen = !(document.getElementById('chat-modal') as HTMLDivElement)?.classList.contains('hidden');
+            const ordinanceOpen = !(document.getElementById('ordinance-modal') as HTMLDivElement)?.classList.contains('hidden');
+            const resultOpen = !(document.getElementById('result-modal') as HTMLDivElement)?.classList.contains('hidden');
+            const zoneOpen = !(document.getElementById('zone-modal') as HTMLDivElement)?.classList.contains('hidden');
+            const uiLocked = chatOpen || ordinanceOpen || resultOpen || zoneOpen;
+            if (uiLocked) return;
             cameraZoomRef.current = THREE.MathUtils.clamp(cameraZoomRef.current + (e.deltaY > 0 ? 0.1 : -0.1), 0.5, 2.0);
         }
         window.addEventListener('wheel', onWheel, { passive: true });
@@ -813,12 +799,7 @@ export default function App() {
                         btn.textContent = el.classList.contains('hidden') ? '사람목록(열기)' : '사람목록(접기)';
                     }} className="mb-2 bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded">사람목록(접기)</button>
                     <div id="quest-log" ref={questLogRef} className="bg-black bg-opacity-50 p-4 rounded-lg max-w-sm" />
-                    <button id="toggle-zone-debug" onClick={() => {
-                        const panel = document.getElementById('zone-debug-panel');
-                        if (!panel) return;
-                        panel.classList.toggle('hidden');
-                    }} className="mt-2 bg-purple-700 hover:bg-purple-600 px-3 py-1 rounded">존/위치 디버그</button>
-                    <div id="zone-debug-panel" className="mt-2 p-3 bg-black bg-opacity-60 rounded hidden text-xs max-w-sm" />
+                    
                 </div>
 
                 <div className={`ui-element absolute top-4 left-1/2 -translate-x-1/2 ${simulationStarted ? '' : 'hidden'}`}>
