@@ -621,8 +621,18 @@ export default function App() {
             const state = npcStates[npc.id] ?? 'neutral';
             let greeting = '';
             if (isCouncilor) {
-                // 시의원 초기 멘트 + 조례안 제출 안내
-                greeting = `${npc.initialRequest}\n문제를 해결할 수 있는 조례안을 제출해주세요.`;
+                // 이 시의원이 속한 이슈키를 찾아 진행도에 따라 문구 분기
+                const found = Object.entries(issues).find(([k, issue]) => {
+                    const all = [...issue.citizens, issue.councilor];
+                    return all.some(p => p.id === npc.id);
+                });
+                const issueKey = found?.[0];
+                const completed = issueKey ? (questsCompleted[issueKey]?.size ?? 0) : 0;
+                if (completed >= 4) {
+                    greeting = `${npc.initialRequest}\n문제를 해결할 수 있는 조례안을 제출해주세요.`;
+                } else {
+                    greeting = `${npc.initialRequest}\n먼저 시민 네 분의 의견을 모두 들어본 뒤, 조례안을 제출해 주세요.`;
+                }
             } else {
                 greeting = state === 'neutral' ? npc.initialRequest : state === 'happy' ? '안녕하세요! 덕분에 문제가 해결되어 정말 기쁩니다. 감사합니다!' : `아직 문제가 해결되지 않았어요... ${npc.initialRequest}`;
             }
