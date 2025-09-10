@@ -540,6 +540,43 @@ export default function App() {
         return [mapX - 4, mapY - 4];
     }
 
+    // 존별 시의원 모달 왼쪽 가이드 동적 렌더링
+    const COUNCILOR_GUIDE_BY_ISSUE: Record<string, string[]> = {
+        scooter: [
+            '목적·정의·시설·운영·안전·단속·재원·평가 순',
+            '학부모·이용자·상인·이동약자 관점 반영',
+            '속도/주차·보행방해·보험/단속·시간제·과태료 지표 포함',
+        ],
+        pet: [
+            '목적·정의·시설·운영·안전·단속·교육·재원·평가 순',
+            '상인·비반려·보호자·수의사 관점 반영',
+            '목줄/배변관리·구역분리·소음·교육/캠페인 지표 포함',
+        ],
+        youth: [
+            '목적·정의·시설·운영·안전·단속·재원·평가 순',
+            '청소년·경찰·지역어르신·업주 관점 반영',
+            '운영시간·안전관리·소음·대안공간 이용률 지표 포함',
+        ],
+        trash: [
+            '목적·정의·시설·운영·안전·단속·재원·평가 순',
+            '미화원·주민·자영업자 관점 반영',
+            '분리수거 준수율·무단투기 적발·CCTV/스티커 효과 지표 포함',
+        ],
+    };
+
+    function updateCouncilorGuide(issueKey: string) {
+        try {
+            const guideEl = document.getElementById('councilor-guide-list') as HTMLUListElement | null;
+            if (!guideEl) return;
+            const items = COUNCILOR_GUIDE_BY_ISSUE[issueKey] ?? [
+                '목적·정의·운영·안전·단속·재원·평가 순',
+                '이해관계자 관점 고르게 반영',
+                '측정 가능한 지표와 시행 일정 포함',
+            ];
+            guideEl.innerHTML = items.map(t => `<li>${t}</li>`).join('');
+        } catch {}
+    }
+
     function initNPCs() {
         const scene = sceneRef.current!;
         const mapContainer = miniMapRef.current!;
@@ -622,6 +659,7 @@ export default function App() {
             const editor = document.getElementById('councilor-ordinance-text') as HTMLTextAreaElement;
             if (title) title.textContent = `${iss[issueKey].title} 해결 조례안 작성`;
             if (editor) editor.value = drafts[issueKey] ?? '';
+            updateCouncilorGuide(issueKey);
             modal?.classList.remove('hidden');
         } else {
             openChatModal(npc);
@@ -1066,11 +1104,7 @@ export default function App() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
                             <div className="md:col-span-1 bg-gray-900/60 p-3 rounded border border-gray-700">
                                 <h3 className="font-bold mb-2 text-blue-300">작성 가이드</h3>
-                                <ul className="text-sm list-disc list-inside space-y-1 text-gray-300">
-                                    <li>목적·정의·시설·운영·안전·단속·교육·재원·평가 순</li>
-                                    <li>상인·비반려·보호자·수의사 관점 반영</li>
-                                    <li>측정 가능한 지표와 시행 일정 포함</li>
-                                </ul>
+                                <ul id="councilor-guide-list" className="text-sm list-disc list-inside space-y-1 text-gray-300"></ul>
                             </div>
                             <div className="md:col-span-2">
                                 <textarea id="councilor-ordinance-text" className="w-full h-80 md:h-96 bg-gray-900 text-white p-3 rounded-lg border border-gray-600 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="여기에 조례안을 문서 형식으로 작성하세요. (예: 제1조 목적 …)"></textarea>
