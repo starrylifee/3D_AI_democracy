@@ -581,15 +581,17 @@ export default function App() {
     }
 
     function handleInteraction(npc: any) {
+        // 최신 스토어 상태를 직접 읽어 stale 클로저 문제 방지
+        const { questsCompleted: qc, issues: iss, ordinanceDrafts: drafts, markQuestDone: markDone } = useSimStore.getState();
         const issueKey = npc.issueKey as string;
         if (npc.id.includes('councilor')) {
-            const completed = questsCompleted[issueKey]?.size ?? 0;
+            const completed = qc[issueKey]?.size ?? 0;
             if (completed < 4) {
                 // 시의원 대화 차단: 먼저 시민들과 대화하도록 안내
                 const lockModal = document.getElementById('councilor-lock-modal') as HTMLDivElement;
                 const lockTitle = document.getElementById('councilor-lock-title') as HTMLHeadingElement;
                 const lockBody = document.getElementById('councilor-lock-body') as HTMLParagraphElement;
-                if (lockTitle) lockTitle.textContent = `${issues[issueKey].title}`;
+                if (lockTitle) lockTitle.textContent = `${iss[issueKey].title}`;
                 if (lockBody) lockBody.textContent = '시민 네 분의 의견을 모두 들은 뒤 시의원에게 조례안을 제출하세요.';
                 lockModal?.classList.remove('hidden');
                 return;
@@ -599,16 +601,16 @@ export default function App() {
             const modal = document.getElementById('councilor-modal') as HTMLDivElement;
             const title = document.getElementById('councilor-modal-title') as HTMLHeadingElement;
             const editor = document.getElementById('councilor-ordinance-text') as HTMLTextAreaElement;
-            if (title) title.textContent = `${issues[issueKey].title} 해결 조례안 작성`;
-            if (editor) editor.value = ordinanceDrafts[issueKey] ?? '';
+            if (title) title.textContent = `${iss[issueKey].title} 해결 조례안 작성`;
+            if (editor) editor.value = drafts[issueKey] ?? '';
             modal?.classList.remove('hidden');
         } else {
             openChatModal(npc);
-            if (questsCompleted[issueKey] && !questsCompleted[issueKey].has(npc.id)) {
-                markQuestDone(issueKey, npc.id);
+            if (qc[issueKey] && !qc[issueKey].has(npc.id)) {
+                markDone(issueKey, npc.id);
                 const li = document.getElementById(`quest-${npc.id}`);
-                if (li) li.innerHTML = `<span>✅</span> <span class="line-through text-gray-400">${npc.name} (${npc.role})</span>`;
-                if (questsCompleted[issueKey].size === 4) {
+                if (li) li.innerHTML = `<span>✅</span> <span class=\"line-through text-gray-400\">${npc.name} (${npc.role})</span>`;
+                if (qc[issueKey].size === 4) {
                     const notice = document.getElementById(`quest-complete-notice-${issueKey}`);
                     notice?.classList.remove('hidden');
                 }
@@ -632,13 +634,14 @@ export default function App() {
             const state = npcStates[npc.id] ?? 'neutral';
             let greeting = '';
             if (isCouncilor) {
-                // 이 시의원이 속한 이슈키를 찾아 진행도에 따라 문구 분기
-                const found = Object.entries(issues).find(([k, issue]) => {
+                // 이 시의원이 속한 이슈키를 찾아 진행도에 따라 문구 분기 (최신 상태 사용)
+                const { issues: iss, questsCompleted: qc } = useSimStore.getState();
+                const found = Object.entries(iss).find(([k, issue]) => {
                     const all = [...issue.citizens, issue.councilor];
                     return all.some(p => p.id === npc.id);
                 });
                 const issueKey = found?.[0];
-                const completed = issueKey ? (questsCompleted[issueKey]?.size ?? 0) : 0;
+                const completed = issueKey ? (qc[issueKey]?.size ?? 0) : 0;
                 if (completed >= 4) {
                     greeting = `${npc.initialRequest}\n문제를 해결할 수 있는 조례안을 제출해주세요.`;
                 } else {

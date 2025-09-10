@@ -1,0 +1,3 @@
+* [33m18ae7ab[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m feat: lock councilor chat until 4 citizens talked; add councilor-only ordinance editor modal; award badge on >=80 score
+[31m|[m  src/App.tsx | 87 [32m+++++++++++++++++++++++++++++++++++++++++++++[m[31m------[m
+[31m|[m  1 file changed, 77 insertions(+), 10 deletions(-)
