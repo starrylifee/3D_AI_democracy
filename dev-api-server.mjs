@@ -42,7 +42,7 @@ app.post('/api/judge', async (req, res) => {
   try {
     const { issueContext = '' } = req.body || {};
     if (!GOOGLE_API_KEY) return res.status(500).json({ error: 'Missing GOOGLE_API_KEY' });
-    const prompt = "You are an AI city councilor. Evaluate a student's proposed ordinance based on the context. Your response MUST be a single valid JSON object in Korean. The JSON must include: `status` ('success', 'failure', or 'partial_success'), `score` (0-100 integer total score), `feedback` (detailed evaluation), `mission` (if not full success), and `citizen_outcomes` (an array of objects, each with citizen `id` and resulting `state`: 'happy' or 'sad'). Keep it as valid JSON ONLY. Context: " + issueContext;
+    const prompt = "You are an AI city councilor. Evaluate a student's proposed ordinance based on the context. Your response MUST be a single valid JSON object in Korean. The JSON must include: `status` ('success', 'failure', or 'partial_success'), `score` (0-100 integer total score), `feedback` (detailed evaluation, maximum 10 sentences), `mission` (if not full success), and `citizen_outcomes` (an array of objects, each with citizen `id` and resulting `state`: 'happy' or 'sad'). Keep `feedback` within 10 sentences. Keep it as valid JSON ONLY. Context: " + issueContext;
     const payload = {
       contents: [],
       systemInstruction: { parts: [{ text: prompt }] },

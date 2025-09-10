@@ -64,6 +64,7 @@ export default function App() {
         hydrateFromLocalStorage,
         ordinanceDrafts, setOrdinanceDraft,
         addBadge,
+        badges,
     } = useSimStore();
 
     const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -775,15 +776,26 @@ export default function App() {
         }
     }
 
+    function clampSentences(text: string, maxCount: number) {
+        try {
+            const parts = String(text || '').split(/(?<=[.!?\u3002\uFF01\uFF1F])\s+/);
+            if (parts.length <= maxCount) return text;
+            return parts.slice(0, maxCount).join(' ');
+        } catch {
+            return text;
+        }
+    }
+
     function displayResult(result: any) {
         const contentDiv = document.getElementById('result-content') as HTMLDivElement;
         let html = '';
+        const feedbackText = clampSentences(result?.feedback ?? '', 10);
         if (result.status === 'success' || result.status === 'partial_success') {
-            html = `<div class=\"bg-green-900 border-l-4 border-green-500 text-green-300 p-4 mb-4 rounded-r-lg\"><p class=\"font-bold text-xl\">[${result.status === 'success' ? '미션 성공!' : '부분 성공!'}] 조례안이 시행되었습니다!</p></div><h3 class=\"font-bold text-lg mb-2\">AI 시의원 평가:</h3><p class=\"bg-gray-700 p-3 rounded\">${result.feedback}</p>`;
+            html = `<div class=\"bg-green-900 border-l-4 border-green-500 text-green-300 p-4 mb-4 rounded-r-lg\"><p class=\"font-bold text-xl\">[${result.status === 'success' ? '미션 성공!' : '부분 성공!'}] 조례안이 시행되었습니다!</p></div><h3 class=\"font-bold text-lg mb-2\">AI 시의원 평가:</h3><p class=\"bg-gray-700 p-3 rounded\">${feedbackText}</p>`;
         } else if (result.status === 'failure') {
-            html = `<div class=\"bg-red-900 border-l-4 border-red-500 text-red-300 p-4 mb-4 rounded-r-lg\"><p class=\"font-bold text-xl\">[추가 미션 발생!] 조례안 보완이 필요합니다.</p></div><h3 class=\"font-bold text-lg mb-2\">AI 시의원 평가:</h3><p class=\"bg-gray-700 p-3 rounded mb-4\">${result.feedback}</p><div class=\"bg-yellow-900 p-4 rounded-lg border-yellow-600\"><p class=\"font-bold text-yellow-300\">&lt;추가 미션&gt;</p><p class=\"text-yellow-400\">${result.mission}</p></div>`;
+            html = `<div class=\"bg-red-900 border-l-4 border-red-500 text-red-300 p-4 mb-4 rounded-r-lg\"><p class=\"font-bold text-xl\">[추가 미션 발생!] 조례안 보완이 필요합니다.</p></div><h3 class=\"font-bold text-lg mb-2\">AI 시의원 평가:</h3><p class=\"bg-gray-700 p-3 rounded mb-4\">${feedbackText}</p><div class=\"bg-yellow-900 p-4 rounded-lg border-yellow-600\"><p class=\"font-bold text-yellow-300\">&lt;추가 미션&gt;</p><p class=\"text-yellow-400\">${result.mission}</p></div>`;
         } else {
-            html = `<div class=\"bg-red-900 border-l-4 border-red-500 text-red-300 p-4 mb-4 rounded-r-lg\"><p class=\"font-bold text-xl\">오류 발생</p></div><p class=\"bg-gray-700 p-3 rounded\">${result.feedback}</p>`;
+            html = `<div class=\"bg-red-900 border-l-4 border-red-500 text-red-300 p-4 mb-4 rounded-r-lg\"><p class=\"font-bold text-xl\">오류 발생</p></div><p class=\"bg-gray-700 p-3 rounded\">${feedbackText}</p>`;
         }
         {
             const sRaw = (result as any)?.score;
@@ -893,12 +905,31 @@ export default function App() {
                     </div>
                 </div>
 
-                <div id="mini-map-container" ref={miniMapRef} className={`ui-element ${simulationStarted ? '' : 'hidden'}`} style={{ position: 'absolute', top: '1rem', right: '1rem', width: 200, height: 200, backgroundColor: 'rgba(0,0,0,0.5)', border: '2px solid #4A5568', borderRadius: 8 }}>
+                <div id="mini-map-container" ref={miniMapRef} className={`ui-element ${simulationStarted ? '' : 'hidden'}`} style={{ position: 'absolute', top: '1rem', right: '1rem', width: 200, height: 200, backgroundColor: 'rgba(0,0,0,0.5)', border: '2px solid #4A5568', borderRadius: 8, overflow: 'hidden' }}>
                     <div id="player-map-icon" className="map-icon" style={{ position: 'absolute', width: 8, height: 8, borderRadius: '50%', backgroundColor: '#4299E1', border: '1px solid white', zIndex: 10 }} />
                     <div style={{ position: 'absolute', bottom: 4, left: 6, fontSize: 10, color: '#CBD5E0' }}>
                         <span className="inline-block w-2 h-2 rounded-full" style={{ background: '#4299E1', border: '1px solid white' }} /> 나
                         <span className="inline-block w-2 h-2 rounded-full ml-3" style={{ background: '#FFD700' }} /> 시의원
                     </div>
+                </div>
+
+                {/* 배지 선반 (우하단 고정) */}
+                <div id="badge-shelf" className={`ui-element ${simulationStarted ? '' : 'hidden'}`} style={{ position: 'absolute', right: '1rem', bottom: '1rem', display: 'grid', gridTemplateColumns: 'repeat(2, 48px)', gridTemplateRows: 'repeat(2, 48px)', gap: '8px', background: 'rgba(0,0,0,0.5)', padding: '10px', borderRadius: 12, border: '1px solid #4A5568' }}>
+                    {['scooter','pet','youth','trash'].map((key, idx) => {
+                        const has = (useSimStore.getState().badges || []).includes(`${key}_badge`);
+                        const label = key === 'scooter' ? '🛴' : key === 'pet' ? '🐾' : key === 'youth' ? '🎧' : '🗑️';
+                        return (
+                            <div key={key} id={`badge-slot-${key}`} title={has ? `${issues[key].title} 배지` : '미획득'} style={{
+                                width: 48, height: 48, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: has ? 'linear-gradient(135deg, #2d3748, #4a5568)' : 'rgba(26,32,44,0.7)',
+                                border: has ? '2px solid #63B3ED' : '1px dashed #718096',
+                                boxShadow: has ? '0 0 8px rgba(99,179,237,0.6)' : 'none',
+                                fontSize: has ? 22 : 20,
+                            }}>
+                                {has ? label : '❓'}
+                            </div>
+                        );
+                    })}
                 </div>
 
                 <div id="zone-modal" className="modal-backdrop fixed inset-0 flex items-center justify-center hidden">
@@ -1033,7 +1064,7 @@ export default function App() {
 
                 <div id="result-modal" className="modal-backdrop fixed inset-0 flex items-center justify-center hidden">
                     <div className="ui-element bg-gray-800 border border-gray-600 p-6 rounded-xl shadow-lg max-w-lg w-full mx-4">
-                        <div id="result-content" />
+                        <div id="result-content" style={{ maxHeight: '50vh', overflowY: 'auto' }} />
                         <div id="loading-spinner" className="text-center p-8 hidden">
                             <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-400 mx-auto" />
                             <p className="mt-4">AI 시의원이 조례안을 검토 중입니다...</p>
