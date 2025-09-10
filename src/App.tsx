@@ -94,6 +94,7 @@ export default function App() {
     const pendingZoneRef = useRef<{ key: string; name: string; proposed: THREE.Vector3 } | null>(null);
     const lastValidPosRef = useRef<THREE.Vector3>(new THREE.Vector3());
     const cameraZoomRef = useRef<number>(1.0);
+    const obstaclesRef = useRef<Array<{ minX: number; maxX: number; minZ: number; maxZ: number; type: 'building' | 'pillar' | 'noentry'; label?: string }>>([]);
 
     useEffect(() => {
         hydrateFromLocalStorage();
@@ -145,11 +146,23 @@ export default function App() {
         mainBuilding.position.set(0, 7.5, 0);
         mainBuilding.castShadow = true; mainBuilding.receiveShadow = true;
         cityHall.add(mainBuilding);
+        // 충돌: 시청 본관 AABB 등록 (약간의 여유 패딩)
+        obstaclesRef.current.push({
+            minX: -15 - 0.6,
+            maxX: 15 + 0.6,
+            minZ: -5 - 0.6,
+            maxZ: 5 + 0.6,
+            type: 'building',
+            label: 'cityhall'
+        });
         for (let i = 0; i < 5; i++) {
             const pillar = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 10, 16), new THREE.MeshStandardMaterial({ color: 0xF7FAFC }));
             pillar.position.set(-12 + i * 6, 5, 6);
             pillar.castShadow = true;
             cityHall.add(pillar);
+            // 충돌: 기둥은 소형 정사각 AABB로 처리
+            const px = -12 + i * 6; const pz = 6; const r = 1.2;
+            obstaclesRef.current.push({ minX: px - r, maxX: px + r, minZ: pz - r, maxZ: pz + r, type: 'pillar', label: `pillar_${i}` });
         }
         scene.add(cityHall);
 
@@ -160,11 +173,39 @@ export default function App() {
             building.castShadow = true;
             building.receiveShadow = true;
             scene.add(building);
+            // 충돌: 빌딩 AABB 등록 (여유 패딩 0.6)
+            const pad = 0.6;
+            obstaclesRef.current.push({
+                minX: x - w/2 - pad,
+                maxX: x + w/2 + pad,
+                minZ: z - d/2 - pad,
+                maxZ: z + d/2 + pad,
+                type: 'building'
+            });
         }
         createBuilding(-30, -30, 25, 20, 25);
         createBuilding(30, -30, 25, 30, 25);
         createBuilding(-30, 30, 25, 25, 25);
         createBuilding(30, 30, 25, 15, 25);
+
+        // 출입불가 구역(예시): 공사장 2곳
+        const noEntryMaterial = new THREE.MeshStandardMaterial({ color: 0xCC2A2A, opacity: 0.25, transparent: true });
+        function addNoEntryZone(cx: number, cz: number, w: number, d: number, label?: string) {
+            const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, d), noEntryMaterial);
+            plane.rotation.x = -Math.PI/2; plane.position.set(cx, 0.02, cz);
+            scene.add(plane);
+            const pad = 0.2;
+            obstaclesRef.current.push({
+                minX: cx - w/2 - pad,
+                maxX: cx + w/2 + pad,
+                minZ: cz - d/2 - pad,
+                maxZ: cz + d/2 + pad,
+                type: 'noentry',
+                label
+            });
+        }
+        addNoEntryZone(0, -18, 8, 6, 'noentry_north_cross');
+        addNoEntryZone(-20, 0, 10, 8, 'noentry_west_side');
 
         const player = new THREE.Group();
         player.position.set(0, 0, 15);
@@ -222,6 +263,40 @@ export default function App() {
             if (x > 10) return 'pet';
             if (x < -10) return 'trash';
             return null;
+        }
+
+        function isOutsideWorld(x: number, z: number) {
+            const half = WORLD_SIZE / 2;
+            return x < -half || x > half || z < -half || z > half;
+        }
+
+        function isBlocked(x: number, z: number) {
+            if (isOutsideWorld(x, z)) return true;
+            for (const ob of obstaclesRef.current) {
+                if (x >= ob.minX && x <= ob.maxX && z >= ob.minZ && z <= ob.maxZ) return true;
+            }
+            return false;
+        }
+
+        function updateZoneDebugOverlay() {
+            const panel = document.getElementById('zone-debug-panel') as HTMLDivElement | null;
+            if (!panel || panel.classList.contains('hidden')) return;
+            const state = useSimStore.getState();
+            const player = playerRef.current!;
+            const pz = getZoneForPosition(player.position) ?? '중앙';
+            let html = `<div class="text-sm text-gray-300">플레이어 존: <span class="font-bold text-blue-300">${pz}</span> (x:${player.position.x.toFixed(1)}, z:${player.position.z.toFixed(1)})</div>`;
+            html += '<div class="mt-2 max-h-56 overflow-y-auto space-y-1">';
+            Object.entries(state.issues).forEach(([issueKey, issue]) => {
+                const title = issue.title;
+                [...issue.citizens, issue.councilor].forEach(npc => {
+                    const npcZone = getZoneForPosition(npc.pos) ?? '중앙';
+                    const declared = issueKey;
+                    const mismatch = (npcZone !== declared);
+                    html += `<div class="${mismatch ? 'text-yellow-300' : 'text-gray-300'}">${npc.name} [선언:${declared}] / [위치:${npcZone}]</div>`;
+                });
+            });
+            html += '</div>';
+            panel.innerHTML = html;
         }
 
         function drawMiniMapBackground() {
@@ -301,6 +376,7 @@ export default function App() {
                     const nextZone = getZoneForPosition(proposed);
                     const zoneModal = document.getElementById('zone-modal') as HTMLDivElement | null;
                     const zoneOpen = zoneModal && !zoneModal.classList.contains('hidden');
+                    // 존 이동 모달 처리
                     if (!zoneOpen && currZone !== nextZone && nextZone) {
                         const issue = useSimStore.getState().issues[nextZone];
                         pendingZoneRef.current = { key: nextZone, name: issue?.title ?? nextZone, proposed };
@@ -310,9 +386,24 @@ export default function App() {
                         if (bodyEl) bodyEl.textContent = `${issue?.title ?? nextZone} 이슈 존으로 넘어가시겠습니까?`;
                         zoneModal?.classList.remove('hidden');
                     } else if (!zoneOpen) {
-                        player.position.copy(proposed);
-                        lastValidPosRef.current.copy(player.position);
-                        currentZoneRef.current = nextZone ?? currZone ?? null;
+                        // 충돌 처리: 전체 이동, 축 분리 대체 시도, 실패 시 정지
+                        const nx = proposed.x; const nz = proposed.z;
+                        if (!isBlocked(nx, nz)) {
+                            player.position.set(nx, player.position.y, nz);
+                            lastValidPosRef.current.copy(player.position);
+                            currentZoneRef.current = nextZone ?? currZone ?? null;
+                        } else {
+                            // 축 분리 슬라이딩
+                            const tryX = !isBlocked(nx, player.position.z);
+                            const tryZ = !isBlocked(player.position.x, nz);
+                            if (tryX) {
+                                player.position.set(nx, player.position.y, player.position.z);
+                            } else if (tryZ) {
+                                player.position.set(player.position.x, player.position.y, nz);
+                            }
+                            lastValidPosRef.current.copy(player.position);
+                            currentZoneRef.current = getZoneForPosition(player.position) ?? currZone ?? null;
+                        }
                     }
                 }
 
@@ -324,10 +415,10 @@ export default function App() {
                 let foundInteractable = false;
                 const playerZone = getZoneForPosition(player.position);
                 Object.entries(state.issues).forEach(([issueKey, issue]) => {
-                    const zoneMatch = playerZone === issueKey;
                     [...issue.citizens, issue.councilor].forEach(npc => {
                         const distance = player.position.distanceTo(npc.pos);
-                        const canInteractHere = zoneMatch && distance < INTERACT_RADIUS;
+                        const npcZone = getZoneForPosition(npc.pos);
+                        const canInteractHere = distance < INTERACT_RADIUS && (npcZone ? playerZone === npcZone : true);
                         if (npc.marker) (npc.marker as any).visible = canInteractHere;
                         if (canInteractHere && !foundInteractable) {
                             setActiveNPC({ ...npc, issueKey });
@@ -346,6 +437,7 @@ export default function App() {
                 }
             }
             mixersRef.current.forEach(mixer => mixer.update(delta));
+            updateZoneDebugOverlay();
             renderer.render(scene, camera);
         }
 
@@ -721,6 +813,12 @@ export default function App() {
                         btn.textContent = el.classList.contains('hidden') ? '사람목록(열기)' : '사람목록(접기)';
                     }} className="mb-2 bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded">사람목록(접기)</button>
                     <div id="quest-log" ref={questLogRef} className="bg-black bg-opacity-50 p-4 rounded-lg max-w-sm" />
+                    <button id="toggle-zone-debug" onClick={() => {
+                        const panel = document.getElementById('zone-debug-panel');
+                        if (!panel) return;
+                        panel.classList.toggle('hidden');
+                    }} className="mt-2 bg-purple-700 hover:bg-purple-600 px-3 py-1 rounded">존/위치 디버그</button>
+                    <div id="zone-debug-panel" className="mt-2 p-3 bg-black bg-opacity-60 rounded hidden text-xs max-w-sm" />
                 </div>
 
                 <div className={`ui-element absolute top-4 left-1/2 -translate-x-1/2 ${simulationStarted ? '' : 'hidden'}`}>
@@ -735,6 +833,11 @@ export default function App() {
                         <h3 className="font-bold mb-2">미션</h3>
                         <p>1) 시민들과 대화하여 4가지 문제에 대한 의견을 듣고</p>
                         <p>2) 담당 시의원에게 조례안을 제출하세요.</p>
+                        <div className="mt-3 text-sm text-gray-300">
+                            <p className="font-bold text-blue-300">조작</p>
+                            <p>이동: WASD 또는 방향키(↑ ↓ ← →)</p>
+                            <p>대화/제출: E</p>
+                        </div>
                     </div>
                 </div>
 
