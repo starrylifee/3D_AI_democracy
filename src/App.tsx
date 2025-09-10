@@ -873,13 +873,21 @@ export default function App() {
                             <button onClick={() => {
                                 // 이어서 시작: 저장된 진행 불러오고 바로 시작
                                 try { hydrateFromLocalStorage(); } catch {}
+                                // UI 동기화: 퀘스트 패널 재구성
+                                try { initUI(); } catch {}
                                 setSimulationStarted(true);
-                                // UI 동기화: 퀘스트 체크/알림 갱신
-                                setTimeout(() => { try { (document.getElementById('toggle-people') as HTMLButtonElement)?.click(); (document.getElementById('toggle-people') as HTMLButtonElement)?.click(); } catch {} }, 0);
                             }} className="bg-blue-600 font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-colors">이어 시작하기</button>
                             <button onClick={() => {
                                 // 새로 시작: 진행도 초기화 후 시작
                                 try { useSimStore.getState().resetAllProgress(); } catch {}
+                                // UI 동기화: 퀘스트 패널 재구성 (모두 미완료 상태로)
+                                try {
+                                    const questLog = document.getElementById('quest-log') as HTMLDivElement | null;
+                                    if (questLog) questLog.innerHTML = '';
+                                    initUI();
+                                    // 보수적: 혹시 남아있던 완료 안내 모두 숨김 처리
+                                    document.querySelectorAll('[id^="quest-complete-notice-"]').forEach((el) => el.classList.add('hidden'));
+                                } catch {}
                                 setSimulationStarted(true);
                             }} className="bg-gray-700 font-bold py-3 px-8 rounded-lg hover:bg-gray-600 transition-colors">새로 시작하기</button>
                         </div>
