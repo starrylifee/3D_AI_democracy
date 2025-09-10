@@ -869,7 +869,20 @@ export default function App() {
                             <p>1. 시민들과 대화하여 4가지 문제에 대한 의견을 듣고</p>
                             <p>2. 담당 시의원에게 조례안을 제출하세요.</p>
                         </div>
-                        <button onClick={() => setSimulationStarted(true)} className="mt-8 bg-blue-600 font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-colors w-full">시뮬레이션 시작하기</button>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-8">
+                            <button onClick={() => {
+                                // 이어서 시작: 저장된 진행 불러오고 바로 시작
+                                try { hydrateFromLocalStorage(); } catch {}
+                                setSimulationStarted(true);
+                                // UI 동기화: 퀘스트 체크/알림 갱신
+                                setTimeout(() => { try { (document.getElementById('toggle-people') as HTMLButtonElement)?.click(); (document.getElementById('toggle-people') as HTMLButtonElement)?.click(); } catch {} }, 0);
+                            }} className="bg-blue-600 font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-colors">이어 시작하기</button>
+                            <button onClick={() => {
+                                // 새로 시작: 진행도 초기화 후 시작
+                                try { useSimStore.getState().resetAllProgress(); } catch {}
+                                setSimulationStarted(true);
+                            }} className="bg-gray-700 font-bold py-3 px-8 rounded-lg hover:bg-gray-600 transition-colors">새로 시작하기</button>
+                        </div>
                     </div>
                 </div>
 
@@ -915,8 +928,8 @@ export default function App() {
 
                 {/* 배지 선반 (우하단 고정) */}
                 <div id="badge-shelf" className={`ui-element ${simulationStarted ? '' : 'hidden'}`} style={{ position: 'absolute', right: '1rem', bottom: '1rem', display: 'grid', gridTemplateColumns: 'repeat(2, 48px)', gridTemplateRows: 'repeat(2, 48px)', gap: '8px', background: 'rgba(0,0,0,0.5)', padding: '10px', borderRadius: 12, border: '1px solid #4A5568' }}>
-                    {['scooter','pet','youth','trash'].map((key, idx) => {
-                        const has = (useSimStore.getState().badges || []).includes(`${key}_badge`);
+                    {['scooter','pet','youth','trash'].map((key) => {
+                        const has = (badges || []).includes(`${key}_badge`);
                         const label = key === 'scooter' ? '🛴' : key === 'pet' ? '🐾' : key === 'youth' ? '🎧' : '🗑️';
                         return (
                             <div key={key} id={`badge-slot-${key}`} title={has ? `${issues[key].title} 배지` : '미획득'} style={{

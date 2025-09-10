@@ -31,6 +31,7 @@ interface SimState {
     persistToLocalStorage(): void;
     addBadge(npcId: string): void;
     clearAllConversations(): void;
+    resetAllProgress(): void;
 }
 
 const initialIssues: Record<string, Issue> = {
@@ -127,6 +128,24 @@ export const useSimStore = create<SimState>((set, get) => ({
     },
     clearAllConversations() {
         set({ conversationHistories: {} });
+        get().persistToLocalStorage();
+    },
+    resetAllProgress() {
+        try { localStorage.removeItem('sim-state'); } catch {}
+        const emptyQuests: Record<string, Set<string>> = Object.fromEntries(
+            Object.keys(get().issues).map(k => [k, new Set<string>()])
+        );
+        set({
+            simulationStarted: false,
+            canInteract: false,
+            activeNPC: null,
+            currentOrdinanceIssue: null,
+            npcStates: {},
+            conversationHistories: {},
+            questsCompleted: emptyQuests,
+            ordinanceDrafts: {},
+            badges: [],
+        });
         get().persistToLocalStorage();
     },
     hydrateFromLocalStorage() {
