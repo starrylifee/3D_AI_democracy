@@ -85,7 +85,6 @@ export default function App() {
         rightLeg: THREE.Object3D;
         body: THREE.Object3D;
         head: THREE.Object3D;
-        faceMaterial: THREE.SpriteMaterial;
         isWalking: boolean;
         walkTime: number;
     } | null>(null);
