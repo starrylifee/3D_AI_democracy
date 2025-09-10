@@ -583,14 +583,25 @@ export default function App() {
     function handleInteraction(npc: any) {
         const issueKey = npc.issueKey as string;
         if (npc.id.includes('councilor')) {
-            if (questsCompleted[issueKey] && questsCompleted[issueKey].size === 4) {
-                setCurrentOrdinanceIssue(issueKey);
-                (document.getElementById('ordinance-modal') as HTMLDivElement)?.classList.remove('hidden');
-                (document.getElementById('ordinance-title') as HTMLHeadingElement).textContent = `${issues[issueKey].title} 해결 조례안 제출`;
-                (document.getElementById('ordinance-text') as HTMLTextAreaElement).value = ordinanceDrafts[issueKey] ?? '';
-            } else {
-                openChatModal(npc);
+            const completed = questsCompleted[issueKey]?.size ?? 0;
+            if (completed < 4) {
+                // 시의원 대화 차단: 먼저 시민들과 대화하도록 안내
+                const lockModal = document.getElementById('councilor-lock-modal') as HTMLDivElement;
+                const lockTitle = document.getElementById('councilor-lock-title') as HTMLHeadingElement;
+                const lockBody = document.getElementById('councilor-lock-body') as HTMLParagraphElement;
+                if (lockTitle) lockTitle.textContent = `${issues[issueKey].title}`;
+                if (lockBody) lockBody.textContent = '시민 네 분의 의견을 모두 들은 뒤 시의원에게 조례안을 제출하세요.';
+                lockModal?.classList.remove('hidden');
+                return;
             }
+            // 4명 완료 후: 전용 조례안 모달을 연다
+            setCurrentOrdinanceIssue(issueKey);
+            const modal = document.getElementById('councilor-modal') as HTMLDivElement;
+            const title = document.getElementById('councilor-modal-title') as HTMLHeadingElement;
+            const editor = document.getElementById('councilor-ordinance-text') as HTMLTextAreaElement;
+            if (title) title.textContent = `${issues[issueKey].title} 해결 조례안 작성`;
+            if (editor) editor.value = ordinanceDrafts[issueKey] ?? '';
+            modal?.classList.remove('hidden');
         } else {
             openChatModal(npc);
             if (questsCompleted[issueKey] && !questsCompleted[issueKey].has(npc.id)) {
@@ -710,7 +721,9 @@ export default function App() {
     }
 
     async function onSubmitOrdinance() {
-        (document.getElementById('ordinance-modal') as HTMLDivElement).classList.add('hidden');
+        // 모든 제출 진입점에서 두 모달을 닫는다
+        (document.getElementById('ordinance-modal') as HTMLDivElement)?.classList.add('hidden');
+        (document.getElementById('councilor-modal') as HTMLDivElement)?.classList.add('hidden');
         const resultModal = document.getElementById('result-modal') as HTMLDivElement;
         const spinner = document.getElementById('loading-spinner') as HTMLDivElement;
         const content = document.getElementById('result-content') as HTMLDivElement;
@@ -718,7 +731,8 @@ export default function App() {
         spinner.classList.remove('hidden');
         content.innerHTML = '';
 
-        const ordinanceText = (document.getElementById('ordinance-text') as HTMLTextAreaElement).value;
+        const ordinanceTextEl = (document.getElementById('councilor-ordinance-text') as HTMLTextAreaElement) || (document.getElementById('ordinance-text') as HTMLTextAreaElement);
+        const ordinanceText = ordinanceTextEl?.value ?? '';
         const issueKey = currentOrdinanceIssue!;
         const issue = issues[issueKey];
         const ctx = `Issue: ${issue.title}. Citizens' concerns: ${issue.citizens.map(c => `${c.name}(${c.role}): ${c.persona}`).join('; ')}. Student's proposal: ${ordinanceText}`;
@@ -746,7 +760,25 @@ export default function App() {
             html = `<div class=\"bg-red-900 border-l-4 border-red-500 text-red-300 p-4 mb-4 rounded-r-lg\"><p class=\"font-bold text-xl\">오류 발생</p></div><p class=\"bg-gray-700 p-3 rounded\">${result.feedback}</p>`;
         }
         if (typeof result.score === 'number') {
-            html = `<div class=\"mb-2 text-sm text-gray-300\">총점: <span class=\"font-bold text-blue-300\">${result.score}</span> / 100</div>` + html;
+            const issueKey = currentOrdinanceIssue as string | null;
+            const score = result.score as number;
+            let badgeRow = '';
+            if (issueKey) {
+                if (score >= 80) {
+                    try {
+                        addBadge(`${issueKey}_badge`);
+                        const toast = document.createElement('div');
+                        toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-blue-700 text-white px-4 py-2 rounded shadow-lg z-50';
+                        toast.textContent = `배지 획득! ${issues[issueKey].title} (80점 이상)`;
+                        document.body.appendChild(toast);
+                        setTimeout(() => { toast.remove(); }, 2500);
+                    } catch {}
+                    badgeRow = `<div class=\"text-green-300\">배지 수여: 예</div>`;
+                } else {
+                    badgeRow = `<div class=\"text-yellow-300\">배지 수여: 기준 미달(80점)</div>`;
+                }
+            }
+            html = `<div class=\"mb-2 text-sm text-gray-300\">총점: <span class=\"font-bold text-blue-300\">${score}</span> / 100</div>${badgeRow}` + html;
         }
         if (result.mission && result.status !== 'failure') {
             html += `<div class=\"mt-4 bg-yellow-900 p-4 rounded-lg border border-yellow-600\"><p class=\"font-bold text-yellow-300\">&lt;남은 과제&gt;</p><p class=\"text-yellow-400\">${result.mission}</p></div>`;
@@ -931,6 +963,41 @@ export default function App() {
                         <div className="flex justify-end space-x-4 mt-4">
                             <button onClick={() => (document.getElementById('ordinance-modal') as HTMLDivElement).classList.add('hidden')} className="bg-gray-600 font-bold py-2 px-6 rounded-lg hover:bg-gray-700 transition-colors">취소</button>
                             <button onClick={onSubmitOrdinance} id="submit-ordinance-btn" className="bg-green-600 font-bold py-2 px-6 rounded-lg hover:bg-green-700 transition-colors">제출하기</button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 시의원 대화 락 모달 */}
+                <div id="councilor-lock-modal" className="modal-backdrop fixed inset-0 flex items-center justify-center hidden">
+                    <div className="ui-element bg-gray-800 border border-gray-600 p-6 rounded-xl shadow-lg max-w-sm w-full mx-4">
+                        <h2 id="councilor-lock-title" className="text-2xl font-bold text-yellow-300 mb-2">시의원 안내</h2>
+                        <p id="councilor-lock-body" className="text-gray-300 mb-4">시민 네 분의 의견을 모두 들은 뒤 시의원에게 조례안을 제출하세요.</p>
+                        <div className="text-right">
+                            <button onClick={() => (document.getElementById('councilor-lock-modal') as HTMLDivElement).classList.add('hidden')} className="bg-gray-600 font-bold py-2 px-6 rounded-lg hover:bg-gray-700 transition-colors">확인</button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 시의원 전용 조례안 문서형 모달 */}
+                <div id="councilor-modal" className="modal-backdrop fixed inset-0 flex items-center justify-center hidden">
+                    <div className="ui-element bg-gray-800 border border-gray-600 p-6 rounded-xl shadow-lg max-w-2xl w-full mx-4">
+                        <h2 id="councilor-modal-title" className="text-2xl font-bold text-green-400 mb-3">조례안 작성</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                            <div className="md:col-span-1 bg-gray-900/60 p-3 rounded border border-gray-700">
+                                <h3 className="font-bold mb-2 text-blue-300">작성 가이드</h3>
+                                <ul className="text-sm list-disc list-inside space-y-1 text-gray-300">
+                                    <li>목적·정의·시설·운영·안전·단속·교육·재원·평가 순</li>
+                                    <li>상인·비반려·보호자·수의사 관점 반영</li>
+                                    <li>측정 가능한 지표와 시행 일정 포함</li>
+                                </ul>
+                            </div>
+                            <div className="md:col-span-2">
+                                <textarea id="councilor-ordinance-text" className="w-full h-80 md:h-96 bg-gray-900 text-white p-3 rounded-lg border border-gray-600 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="여기에 조례안을 문서 형식으로 작성하세요. (예: 제1조 목적 …)"></textarea>
+                            </div>
+                        </div>
+                        <div className="flex justify-end space-x-3">
+                            <button onClick={() => (document.getElementById('councilor-modal') as HTMLDivElement).classList.add('hidden')} className="bg-gray-600 font-bold py-2 px-6 rounded-lg hover:bg-gray-700 transition-colors">취소</button>
+                            <button onClick={onSubmitOrdinance} className="bg-green-600 font-bold py-2 px-6 rounded-lg hover:bg-green-700 transition-colors">제출하기</button>
                         </div>
                     </div>
                 </div>
