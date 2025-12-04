@@ -21,7 +21,7 @@ app.post('/api/chat', async (req, res) => {
       contents: history.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
       systemInstruction: { parts: [{ text: systemText }] },
     };
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GOOGLE_API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_API_KEY}`;
     const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (!resp.ok) {
       const text = await resp.text();
@@ -47,7 +47,7 @@ app.post('/api/judge', async (req, res) => {
       contents: [],
       systemInstruction: { parts: [{ text: prompt }] },
     };
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GOOGLE_API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_API_KEY}`;
     const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (!resp.ok) {
       const text = await resp.text();
