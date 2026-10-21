@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useSimStore } from './store/useSimStore';
 import { callChatAPI, callJudgeAPI, fetchLockedZones, tryUnlockZone } from './lib/api';
+import { loadTownLibrary, buildTown } from './world/town';
 
 // 구역 잠금: 비밀번호는 서버(ZONE_PASSWORDS)에만 있다. 연 구역은 이 탭이 닫히면 다시 잠긴다.
 const ZONE_KEYS = ['scooter', 'pet', 'youth', 'trash'];
@@ -108,6 +109,7 @@ export default function App() {
     const isZoneLocked = (key: string) => lockedZonesRef.current.has(key) && !unlockedZonesRef.current.has(key);
     const lastValidPosRef = useRef<THREE.Vector3>(new THREE.Vector3());
     const cameraZoomRef = useRef<number>(1.0);
+    const townFadeRef = useRef<((camera: THREE.Camera, target: THREE.Vector3) => void) | null>(null);
     const obstaclesRef = useRef<Array<{ minX: number; maxX: number; minZ: number; maxZ: number; type: 'building' | 'pillar' | 'noentry'; label?: string }>>([]);
 
     useEffect(() => {
@@ -146,18 +148,25 @@ export default function App() {
         directionalLight.shadow.camera.right = 100;
         directionalLight.shadow.camera.top = 100;
         directionalLight.shadow.camera.bottom = -100;
+        // 그림자 줄무늬(shadow acne) 방지
+        directionalLight.shadow.bias = -0.0005;
+        directionalLight.shadow.normalBias = 0.05;
         scene.add(directionalLight);
 
+        // 아래 단순 도형들은 마을 에셋(town.glb)을 불러오기 전/실패했을 때 보이는 대체 모습이다
+        const fallbackVisuals: THREE.Object3D[] = [];
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE), new THREE.MeshStandardMaterial({ color: 0x559033 }));
         ground.rotation.x = -Math.PI / 2;
         ground.receiveShadow = true;
         scene.add(ground);
+        fallbackVisuals.push(ground);
 
         const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x4A5568 });
         const road1 = new THREE.Mesh(new THREE.PlaneGeometry(10, WORLD_SIZE), roadMaterial);
         road1.rotation.x = -Math.PI/2; road1.position.y = 0.01; scene.add(road1);
         const road2 = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_SIZE, 10), roadMaterial);
         road2.rotation.x = -Math.PI/2; road2.position.y = 0.01; scene.add(road2);
+        fallbackVisuals.push(road1, road2);
 
         const cityHall = new THREE.Group();
         const mainBuilding = new THREE.Mesh(new THREE.BoxGeometry(30, 15, 10), new THREE.MeshStandardMaterial({ color: 0xE2E8F0 }));
@@ -183,6 +192,7 @@ export default function App() {
             obstaclesRef.current.push({ minX: px - r, maxX: px + r, minZ: pz - r, maxZ: pz + r, type: 'pillar', label: `pillar_${i}` });
         }
         scene.add(cityHall);
+        fallbackVisuals.push(cityHall);
 
         const buildingMaterial = new THREE.MeshStandardMaterial({ color: 0xA0AEC0 });
         function createBuilding(x: number, z: number, w: number, h: number, d: number) {
@@ -191,6 +201,7 @@ export default function App() {
             building.castShadow = true;
             building.receiveShadow = true;
             scene.add(building);
+            fallbackVisuals.push(building);
             // 충돌: 빌딩 AABB 등록 (여유 패딩 0.6)
             const pad = 0.6;
             obstaclesRef.current.push({
@@ -212,6 +223,7 @@ export default function App() {
             const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, d), noEntryMaterial);
             plane.rotation.x = -Math.PI/2; plane.position.set(cx, 0.02, cz);
             scene.add(plane);
+            fallbackVisuals.push(plane);
             const pad = 0.2;
             obstaclesRef.current.push({
                 minX: cx - w/2 - pad,
@@ -224,6 +236,14 @@ export default function App() {
         }
         addNoEntryZone(0, -18, 8, 6, 'noentry_north_cross');
         addNoEntryZone(-20, 0, 10, 8, 'noentry_west_side');
+
+        loadTownLibrary()
+            .then((lib) => {
+                if (sceneRef.current !== scene) return;
+                townFadeRef.current = buildTown(scene, lib, obstaclesRef.current, WORLD_SIZE).updateFade;
+                fallbackVisuals.forEach((o) => scene.remove(o));
+            })
+            .catch((err) => console.warn('[town] 마을 에셋을 불러오지 못해 기본 모습으로 둡니다', err));
 
         const player = new THREE.Group();
         player.position.set(0, 0, 15);
@@ -405,6 +425,7 @@ export default function App() {
                 const cameraTarget = player.position.clone().add(cameraOffset);
                 camera.position.lerp(cameraTarget, 0.1);
                 camera.lookAt(player.position);
+                townFadeRef.current?.(camera, player.position);
 
                 let foundInteractable = false;
                 const playerZone = getZoneForPosition(player.position);

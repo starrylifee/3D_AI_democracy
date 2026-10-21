@@ -1,0 +1,10 @@
+3D 에셋 출처 (모두 CC0 1.0, 자유 이용 가능)
+
+- KayKit City Builder Bits 1.0 — Kay Lousberg (www.kaylousberg.com)
+  건물, 도로, 보도, 가로등, 차, 상자 등
+- Kenney Starter Kit City Builder — Kenney (www.kenney.nl)
+  나무숲
+- Quaternius Animated Men/Women Characters, Animal Pack Vol.2 — Quaternius (quaternius.com)
+  사람, 강아지
+
+시청, 공사 바리케이드, 고깔은 이 프로젝트에서 블렌더로 직접 만들었다.
