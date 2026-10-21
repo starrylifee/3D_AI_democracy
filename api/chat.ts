@@ -11,9 +11,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         systemInstruction: { parts: [{ text: systemText ?? '' }] },
     };
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
     const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    if (!resp.ok) return res.status(resp.status).json({ error: 'Upstream error' });
+    if (!resp.ok) {
+        console.error('[api] upstream error', resp.status, await resp.text());
+        return res.status(resp.status).json({ error: 'Upstream error' });
+    }
     const json = await resp.json();
     const text = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     return res.status(200).json({ text });
