@@ -8,6 +8,8 @@ export type CharacterHandle = {
     root: THREE.Object3D;
     mixer: THREE.AnimationMixer;
     play: (name: 'Idle' | 'Walk' | 'Sit') => void;
+    // 한 번 재생하는 점프. 점프 동작이 없거나 이미 뛰는 중이면 false
+    jump: () => boolean;
 };
 
 const loader = new GLTFLoader();
@@ -28,17 +30,39 @@ export async function loadCharacter(id: string): Promise<CharacterHandle> {
     const mixer = new THREE.AnimationMixer(root);
     const actions = new Map(gltf.animations.map((clip) => [clip.name, mixer.clipAction(clip)]));
     let current: THREE.AnimationAction | null = null;
+    let jumping = false;
     const play = (name: 'Idle' | 'Walk' | 'Sit') => {
+        if (jumping) return;
         const next = actions.get(name) ?? actions.get('Idle');
         if (!next || next === current) return;
         next.reset().fadeIn(0.2).play();
         current?.fadeOut(0.2);
         current = next;
     };
+    const jump = () => {
+        const j = actions.get('Jump');
+        if (!j || jumping) return false;
+        jumping = true;
+        j.reset();
+        j.setLoop(THREE.LoopOnce, 1);
+        j.clampWhenFinished = true;
+        j.timeScale = 1.3;
+        j.fadeIn(0.08).play();
+        current?.fadeOut(0.08);
+        current = j;
+        const onFinished = (e: { action: THREE.AnimationAction }) => {
+            if (e.action !== j) return;
+            mixer.removeEventListener('finished', onFinished as any);
+            jumping = false;
+            play('Idle');
+        };
+        mixer.addEventListener('finished', onFinished as any);
+        return true;
+    };
     const first = actions.has('Sit') ? 'Sit' : 'Idle';
     play(first);
     // 시민들이 똑같이 움직이지 않게 시작 시점을 흩뜨린다
     const action = actions.get(first);
     if (action) action.time = Math.random() * action.getClip().duration;
-    return { root, mixer, play };
+    return { root, mixer, play, jump };
 }

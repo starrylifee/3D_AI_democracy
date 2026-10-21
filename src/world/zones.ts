@@ -38,8 +38,8 @@ const PLACES: Place[] = [
     { name: 'pt_waste_station', x: 39, z: 8.5, solid: [0.5, 0.4] },
 
     // 남쪽 · 청소년 공간: 농구 코트, 작은 무대, PC방 간판, 자판기, 스케이트 램프, 어르신 쉼터 벤치
-    { name: 'yt_court', x: -11.6, z: 33, rot: 90 },
-    { name: 'yt_basketball_hoop', x: -11.6, z: 38.6, rot: 180, solid: [0.7, 0.7] },
+    { name: 'yt_court', x: -11.3, z: 34 },
+    { name: 'yt_basketball_hoop', x: -11.3, z: 28.9, solid: [0.6, 1.0] },
     { name: 'yt_stage', x: 11, z: 37, solid: [3.1, 2.1] },
     { name: 'yt_pc_sign', x: 13.5, z: 23, solid: [0.8, 0.4] },
     { name: 'yt_vending', x: 7.6, z: 30, rot: -90, solid: [0.7, 0.45] },

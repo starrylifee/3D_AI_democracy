@@ -370,6 +370,15 @@ export default function App() {
         drawMiniMapBackground();
 
         const clock = new THREE.Clock();
+        // 성능 점검 모드: 주소 뒤에 ?fps=1 을 붙이면 왼쪽 아래에 초당 프레임 수와 그리기 횟수를 보여 준다
+        const perfEl = new URLSearchParams(window.location.search).has('fps') ? document.createElement('div') : null;
+        if (perfEl) {
+            perfEl.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:60;background:rgba(0,0,0,.7);color:#7CFC9A;font:14px monospace;padding:4px 8px;border-radius:4px;pointer-events:none';
+            document.body.appendChild(perfEl);
+            (window as any).__simDebug = { playerAnim: playerAnimRef };
+        }
+        let perfFrames = 0;
+        let perfStart = performance.now();
         function animate() {
             animIdRef.current = requestAnimationFrame(animate);
             const delta = clock.getDelta();
@@ -474,6 +483,18 @@ export default function App() {
             }
             mixersRef.current.forEach(mixer => mixer.update(delta));
             renderer.render(scene, camera);
+            if (perfEl) {
+                perfFrames++;
+                const now = performance.now();
+                if (now - perfStart >= 1000) {
+                    const fps = Math.round((perfFrames * 1000) / (now - perfStart));
+                    const { calls, triangles } = renderer.info.render;
+                    perfEl.textContent = `FPS ${fps} · draw ${calls} · tri ${Math.round(triangles / 1000)}k`;
+                    (window as any).__simPerf = { fps, calls, triangles };
+                    perfFrames = 0;
+                    perfStart = now;
+                }
+            }
         }
 
         animate();
@@ -508,6 +529,12 @@ export default function App() {
                 if (uiLocked) { e.preventDefault(); return; }
                 setKey(key as any, true);
             }
+            // 스페이스바: 점프 (버튼에 남은 포커스가 스페이스로 눌리지 않게 막는다)
+            if (key === ' ' && !uiLocked) {
+                e.preventDefault();
+                if ((document.activeElement as HTMLElement | null)?.tagName === 'BUTTON') (document.activeElement as HTMLElement).blur();
+                playerAnimRef.current?.jump();
+            }
             const st = useSimStore.getState();
             if (key === 'e' && st.canInteract && st.activeNPC && !uiLocked) {
                 e.preventDefault();
@@ -523,6 +550,7 @@ export default function App() {
         window.addEventListener('keyup', onKeyUp);
 
         return () => {
+            perfEl?.remove();
             window.removeEventListener('resize', onResize);
             window.removeEventListener('wheel', onWheel as any);
             window.removeEventListener('keydown', onKeyDown);
@@ -1060,6 +1088,7 @@ export default function App() {
                             <h2 className="font-bold text-lg mb-2">조작 방법</h2>
                             <p><span className="font-bold text-blue-300">W, A, S, D 또는 방향키:</span> 이동</p>
                             <p><span className="font-bold text-blue-300">E:</span> 시민과 대화 / 조례안 제출</p>
+                            <p><span className="font-bold text-blue-300">스페이스바:</span> 점프</p>
                             <h2 className="font-bold text-lg mt-4 mb-2">미션</h2>
                             <p>1. 시민들과 대화하여 4가지 문제에 대한 의견을 듣고</p>
                             <p>2. 담당 시의원에게 조례안을 제출하세요.</p>
@@ -1118,6 +1147,7 @@ export default function App() {
                             <p className="font-bold text-blue-300">조작</p>
                             <p>이동: WASD 또는 방향키(↑ ↓ ← →)</p>
                             <p>대화/제출: E</p>
+                            <p>점프: 스페이스바</p>
                         </div>
                     </div>
                 </div>
