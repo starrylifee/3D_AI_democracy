@@ -8,7 +8,9 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 
 const PORT = (process.env.API_PORT || 3000);
-let GOOGLE_API_KEY = (process.env.GOOGLE_API_KEY || '').trim();
+const FREE_KEY_FROM = Date.parse(process.env.FREE_KEY_FROM || '2026-11-10T00:00:00+09:00');
+const FREE_KEY = (process.env.GOOGLE_API_KEY_FREE || '').trim();
+let GOOGLE_API_KEY = (FREE_KEY && Date.now() >= FREE_KEY_FROM) ? FREE_KEY : (process.env.GOOGLE_API_KEY || '').trim();
 const obfuscatedKey = GOOGLE_API_KEY ? `${GOOGLE_API_KEY.slice(0, 4)}...${GOOGLE_API_KEY.slice(-4)}` : '';
 console.log('[dev-api] config', { PORT: String(PORT).trim(), hasKey: Boolean(GOOGLE_API_KEY), keyPreview: obfuscatedKey });
 
