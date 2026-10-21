@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { gltfLoader } from './loader';
+import { mergeStatic } from './merge';
 
 // 마을 겉모습: public/models/town.glb의 조각들을 이름으로 꺼내 배치한다.
 // 부딪힘 범위(시청·건물·공사장)는 App에서 이미 등록한 것을 그대로 쓰고, 여기서는 새로 놓는 소품(나무·차·가로등)만 추가한다.
@@ -7,7 +8,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 export type Obstacle = { minX: number; maxX: number; minZ: number; maxZ: number; type: 'building' | 'pillar' | 'noentry'; label?: string };
 
 export async function loadTownLibrary(url = '/models/town.glb'): Promise<THREE.Object3D> {
-    const gltf = await new GLTFLoader().loadAsync(url);
+    const gltf = await gltfLoader.loadAsync(url);
     return gltf.scene;
 }
 
@@ -39,6 +40,7 @@ export function buildTown(scene: THREE.Scene, lib: THREE.Object3D, obstacles: Ob
     root.name = 'town';
     scene.add(root);
     const fadeables: Array<ReturnType<typeof makeFadeable>> = [];
+    const fadeObjects: THREE.Object3D[] = [];
 
     function put(name: string, x: number, z: number, opts: { rot?: number; s?: number; sy?: number; y?: number; shadow?: boolean } = {}) {
         const src = lib.getObjectByName(name);
@@ -80,14 +82,14 @@ export function buildTown(scene: THREE.Scene, lib: THREE.Object3D, obstacles: Ob
 
     // 시청 (본관·기둥 부딪힘은 App에 이미 있음)
     const hall = put('cityhall', 0, 0);
-    if (hall) fadeables.push(makeFadeable(hall));
+    if (hall) { fadeables.push(makeFadeable(hall)); fadeObjects.push(hall); }
 
     // 네 모서리 건물 블록: 25x25 자리에 2x2로 4채 (원본 2x2 → 12x12)
     const blocks: Array<[number, number, string]> = [[-30, -30, 'ABCD'], [30, -30, 'EFGH'], [-30, 30, 'CEGA'], [30, 30, 'BDFH']];
     for (const [bx, bz, kinds] of blocks) {
         [...kinds].forEach((k, i) => {
             const b = put(`kk_building_${k}`, bx + (i % 2 ? 6 : -6), bz + (i < 2 ? -6 : 6), { s: 6 });
-            if (b) fadeables.push(makeFadeable(b));
+            if (b) { fadeables.push(makeFadeable(b)); fadeObjects.push(b); }
         });
     }
 
@@ -150,6 +152,9 @@ export function buildTown(scene: THREE.Scene, lib: THREE.Object3D, obstacles: Ob
         tree(x, z, 7);
         block(x, z, 3.5, 3.5, 'trees');
     }
+
+    // 움직이지 않는 도로·나무·가로등 등은 재질별로 합친다 (반투명 처리할 건물은 제외)
+    mergeStatic(scene, root, fadeObjects);
 
     // 매 프레임 호출: 카메라→캐릭터 시선에 걸린 건물을 서서히 반투명하게
     const ray = new THREE.Ray();

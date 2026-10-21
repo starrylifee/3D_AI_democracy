@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { gltfLoader } from './loader';
+import { mergeStatic } from './merge';
 import type { Obstacle } from './town';
 
 // 구역별 소품(public/models/zone_props.glb)을 놓는다. 각 구역의 갈등이 눈에 보이도록 시민 근처에 배치한다.
@@ -58,7 +59,7 @@ const PLACES: Place[] = [
 ];
 
 export async function buildZoneProps(scene: THREE.Scene, obstacles: Obstacle[], url = '/models/zone_props.glb') {
-    const lib = (await new GLTFLoader().loadAsync(url)).scene;
+    const lib = (await gltfLoader.loadAsync(url)).scene;
     const root = new THREE.Group();
     root.name = 'zone-props';
     for (const p of PLACES) {
@@ -83,5 +84,6 @@ export async function buildZoneProps(scene: THREE.Scene, obstacles: Obstacle[], 
         }
     }
     scene.add(root);
+    mergeStatic(scene, root);
     return root;
 }

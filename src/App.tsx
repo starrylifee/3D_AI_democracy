@@ -144,18 +144,20 @@ export default function App() {
         const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
         directionalLight.position.set(50, 50, 25);
         directionalLight.castShadow = true;
-        directionalLight.shadow.mapSize.width = 4096;
-        directionalLight.shadow.mapSize.height = 4096;
+        // 그림자는 학생 주변(±45)만 계산하고 해가 학생을 따라간다 (크롬북 성능)
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
         directionalLight.shadow.camera.near = 0.5;
         directionalLight.shadow.camera.far = 200;
-        directionalLight.shadow.camera.left = -100;
-        directionalLight.shadow.camera.right = 100;
-        directionalLight.shadow.camera.top = 100;
-        directionalLight.shadow.camera.bottom = -100;
+        directionalLight.shadow.camera.left = -45;
+        directionalLight.shadow.camera.right = 45;
+        directionalLight.shadow.camera.top = 45;
+        directionalLight.shadow.camera.bottom = -45;
         // 그림자 줄무늬(shadow acne) 방지
         directionalLight.shadow.bias = -0.0005;
         directionalLight.shadow.normalBias = 0.05;
         scene.add(directionalLight);
+        scene.add(directionalLight.target);
 
         // 아래 단순 도형들은 마을 에셋(town.glb)을 불러오기 전/실패했을 때 보이는 대체 모습이다
         const fallbackVisuals: THREE.Object3D[] = [];
@@ -448,6 +450,8 @@ export default function App() {
                 const cameraTarget = player.position.clone().add(cameraOffset);
                 camera.position.lerp(cameraTarget, 0.1);
                 camera.lookAt(player.position);
+                directionalLight.position.set(player.position.x + 50, 50, player.position.z + 25);
+                directionalLight.target.position.set(player.position.x, 0, player.position.z);
                 townFadeRef.current?.(camera, player.position);
 
                 let foundInteractable = false;

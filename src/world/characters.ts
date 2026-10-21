@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { gltfLoader } from './loader';
+import { mergeCharacter } from './merge-character';
 
 // 캐릭터 모델(public/models/characters/<id>.glb)을 불러와 동작(Idle/Walk/Sit)을 재생한다.
 // 파일마다 키 2.4, 발바닥이 원점, 정면이 +Z다. 게임에서는 1.2배로 키워 쓴다.
@@ -12,12 +13,11 @@ export type CharacterHandle = {
     jump: () => boolean;
 };
 
-const loader = new GLTFLoader();
 // 원본 키 2.4는 마을에 비해 작아 보여서 조금 키운다
 const CHARACTER_SCALE = 1.2;
 
 export async function loadCharacter(id: string): Promise<CharacterHandle> {
-    const gltf = await loader.loadAsync(`/models/characters/${id}.glb`);
+    const gltf = await gltfLoader.loadAsync(`/models/characters/${id}.glb`);
     const root = gltf.scene;
     root.scale.setScalar(CHARACTER_SCALE);
     root.traverse((o) => {
@@ -27,6 +27,8 @@ export async function loadCharacter(id: string): Promise<CharacterHandle> {
             o.frustumCulled = false;
         }
     });
+    // 몸과 소품을 메시 하나로 합쳐 그리기 횟수를 줄인다 (실패하면 그대로 둔다)
+    try { mergeCharacter(root); } catch (err) { console.warn('[character] 합치기 실패', id, err); }
     const mixer = new THREE.AnimationMixer(root);
     const actions = new Map(gltf.animations.map((clip) => [clip.name, mixer.clipAction(clip)]));
     let current: THREE.AnimationAction | null = null;
