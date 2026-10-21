@@ -226,8 +226,7 @@ export default function App() {
         addNoEntryZone(-20, 0, 10, 8, 'noentry_west_side');
 
         const player = new THREE.Group();
-        // 시작 위치: 시청 앞 광장 (어느 구역에도 속하지 않음)
-        player.position.set(0, 0, 8.5);
+        player.position.set(0, 0, 15);
         playerRef.current = player;
         scene.add(player);
         lastValidPosRef.current.copy(player.position);
@@ -277,10 +276,11 @@ export default function App() {
 
         function getZoneForPosition(pos: THREE.Vector3): string | null {
             const x = pos.x; const z = pos.z;
-            if (z < -10) return 'scooter';
-            if (z > 10) return 'youth';
-            if (x > 10) return 'pet';
-            if (x < -10) return 'trash';
+            // 경계는 미니맵 색 구역과 같다. 시청 둘레 광장(가운데 40x40)은 어느 구역에도 속하지 않는다.
+            if (z < -20) return 'scooter';
+            if (z > 20) return 'youth';
+            if (x > 20) return 'pet';
+            if (x < -20) return 'trash';
             return null;
         }
 
