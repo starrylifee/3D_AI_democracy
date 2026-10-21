@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { useSimStore } from './store/useSimStore';
 import { callChatAPI, callJudgeAPI, fetchLockedZones, tryUnlockZone } from './lib/api';
 import { loadTownLibrary, buildTown } from './world/town';
+import { buildZoneProps } from './world/zones';
+import { loadCharacter, type CharacterHandle } from './world/characters';
 
 // 구역 잠금: 비밀번호는 서버(ZONE_PASSWORDS)에만 있다. 연 구역은 이 탭이 닫히면 다시 잠긴다.
 const ZONE_KEYS = ['scooter', 'pet', 'youth', 'trash'];
@@ -110,6 +112,7 @@ export default function App() {
     const lastValidPosRef = useRef<THREE.Vector3>(new THREE.Vector3());
     const cameraZoomRef = useRef<number>(1.0);
     const townFadeRef = useRef<((camera: THREE.Camera, target: THREE.Vector3) => void) | null>(null);
+    const playerAnimRef = useRef<CharacterHandle | null>(null);
     const obstaclesRef = useRef<Array<{ minX: number; maxX: number; minZ: number; maxZ: number; type: 'building' | 'pillar' | 'noentry'; label?: string }>>([]);
 
     useEffect(() => {
@@ -124,7 +127,8 @@ export default function App() {
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB);
         scene.fog = new THREE.Fog(0x87CEEB, 50, 150);
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        // 화각을 좁혀 화면 가장자리 왜곡(건물·사람이 누워 보이는 현상)을 줄인다
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 5, 10);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -244,6 +248,7 @@ export default function App() {
                 fallbackVisuals.forEach((o) => scene.remove(o));
             })
             .catch((err) => console.warn('[town] 마을 에셋을 불러오지 못해 기본 모습으로 둡니다', err));
+        buildZoneProps(scene, obstaclesRef.current).catch((err) => console.warn('[zones] 구역 소품을 불러오지 못했습니다', err));
 
         const player = new THREE.Group();
         player.position.set(0, 0, 15);
@@ -289,6 +294,14 @@ export default function App() {
         const playerRig = createCuteCharacter(0x6BA4FF, 1.0);
         player.add(playerRig.group);
         playerRigRef.current = playerRig;
+        // 캐릭터 모델을 불러오면 상자 캐릭터와 바꿔 끼운다 (실패하면 상자 캐릭터 그대로)
+        loadCharacter('player').then((h) => {
+            if (sceneRef.current !== scene) return;
+            player.remove(playerRig.group);
+            player.add(h.root);
+            mixersRef.current.push(h.mixer);
+            playerAnimRef.current = h;
+        }).catch(() => {});
 
         // Initialize NPCs and UI using procedural characters
         initNPCs();
@@ -368,6 +381,7 @@ export default function App() {
                 if (state.keys.w) moveDirection.z -= 1; if (state.keys.s) moveDirection.z += 1;
                 if (state.keys.a) moveDirection.x -= 1; if (state.keys.d) moveDirection.x += 1;
                 moveDirection.normalize();
+                playerAnimRef.current?.play(moveDirection.length() > 0 ? 'Walk' : 'Idle');
 
                 const rig = playerRigRef.current;
                 if (rig) {
@@ -421,7 +435,7 @@ export default function App() {
                     }
                 }
 
-                const cameraOffset = new THREE.Vector3(0, 10 * cameraZoomRef.current, 12 * cameraZoomRef.current);
+                const cameraOffset = new THREE.Vector3(0, 14 * cameraZoomRef.current, 17 * cameraZoomRef.current);
                 const cameraTarget = player.position.clone().add(cameraOffset);
                 camera.position.lerp(cameraTarget, 0.1);
                 camera.lookAt(player.position);
@@ -435,6 +449,13 @@ export default function App() {
                         const npcZone = getZoneForPosition(npc.pos);
                         const canInteractHere = distance < INTERACT_RADIUS && (npcZone ? playerZone === npcZone : true);
                         if (npc.marker) (npc.marker as any).visible = canInteractHere;
+                        // 학생이 가까이 오면 시민이 학생 쪽으로 몸을 돌린다
+                        const npcObj = (npc as any).object as THREE.Object3D | undefined;
+                        if (npcObj && distance < 9) {
+                            const goal = Math.atan2(player.position.x - npc.pos.x, player.position.z - npc.pos.z);
+                            const diff = Math.atan2(Math.sin(goal - npcObj.rotation.y), Math.cos(goal - npcObj.rotation.y));
+                            npcObj.rotation.y += diff * 0.1;
+                        }
                         if (canInteractHere && !foundInteractable) {
                             setActiveNPC({ ...npc, issueKey });
                             foundInteractable = true;
@@ -638,13 +659,26 @@ export default function App() {
                 npcContainer.add(rig.group);
                 npcContainer.position.copy(npcData.pos);
                 scene.add(npcContainer);
+                loadCharacter(npcData.id).then((h) => {
+                    npcContainer.remove(rig.group);
+                    npcContainer.add(h.root);
+                    mixersRef.current.push(h.mixer);
+                }).catch(() => {});
+                if (npcData.id === 'pet_owner') {
+                    loadCharacter('dog').then((d) => {
+                        d.root.position.set(1.5, 0, 0.8);
+                        d.root.rotation.y = -0.5;
+                        npcContainer.add(d.root);
+                        mixersRef.current.push(d.mixer);
+                    }).catch(() => {});
+                }
 
                 (npcData as any).actions = { state: 'neutral' };
 
                 const spriteMaterial = new THREE.SpriteMaterial({ map: createExclamationMarkTexture(), color: 0xffff00 });
                 const sprite = new THREE.Sprite(spriteMaterial);
                 sprite.scale.set(1, 1.5, 1);
-                sprite.position.set(0, 2.5, 0);
+                sprite.position.set(0, 3.6, 0);
                 sprite.visible = false;
                 npcContainer.add(sprite);
                 (npcData as any).object = npcContainer;
