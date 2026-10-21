@@ -47,7 +47,7 @@ app.post('/api/judge', async (req, res) => {
       contents: [],
       systemInstruction: { parts: [{ text: prompt }] },
     };
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${GOOGLE_API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${GOOGLE_API_KEY}`;
     const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (!resp.ok) {
       const text = await resp.text();
