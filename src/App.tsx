@@ -1,7 +1,16 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useSimStore } from './store/useSimStore';
-import { callChatAPI, callJudgeAPI } from './lib/api';
+import { callChatAPI, callJudgeAPI, fetchLockedZones, tryUnlockZone } from './lib/api';
+
+// 구역 잠금: 비밀번호는 서버(ZONE_PASSWORDS)에만 있다. 연 구역은 이 탭이 닫히면 다시 잠긴다.
+const ZONE_KEYS = ['scooter', 'pet', 'youth', 'trash'];
+const UNLOCKED_STORAGE_KEY = 'zone-unlocked';
+// '구역 열기'로 이동할 때 서는 자리 (각 시의원 앞)
+const ZONE_ENTRY: Record<string, [number, number]> = { scooter: [0, -31], pet: [31, 0], youth: [0, 31], trash: [-31, 0] };
+function loadUnlockedZones(): Set<string> {
+    try { return new Set(JSON.parse(sessionStorage.getItem(UNLOCKED_STORAGE_KEY) ?? '[]')); } catch { return new Set(); }
+}
 
 // NPC별 말투/행동 지침
 const NPC_STYLE: Record<string, string> = {
@@ -92,7 +101,11 @@ export default function App() {
     const animIdRef = useRef<number | null>(null);
     const isSendingRef = useRef<boolean>(false);
     const currentZoneRef = useRef<string | null>(null);
-    const pendingZoneRef = useRef<{ key: string; name: string; proposed: THREE.Vector3 } | null>(null);
+    const pendingZoneRef = useRef<{ key: string; name: string; proposed: THREE.Vector3 | null; locked: boolean } | null>(null);
+    // 서버 응답 전까지는 모든 구역을 잠긴 것으로 본다
+    const lockedZonesRef = useRef<Set<string>>(new Set(ZONE_KEYS));
+    const unlockedZonesRef = useRef<Set<string>>(loadUnlockedZones());
+    const isZoneLocked = (key: string) => lockedZonesRef.current.has(key) && !unlockedZonesRef.current.has(key);
     const lastValidPosRef = useRef<THREE.Vector3>(new THREE.Vector3());
     const cameraZoomRef = useRef<number>(1.0);
     const obstaclesRef = useRef<Array<{ minX: number; maxX: number; minZ: number; maxZ: number; type: 'building' | 'pillar' | 'noentry'; label?: string }>>([]);
@@ -100,6 +113,10 @@ export default function App() {
     useEffect(() => {
         hydrateFromLocalStorage();
     }, [hydrateFromLocalStorage]);
+
+    useEffect(() => {
+        fetchLockedZones().then((list) => { lockedZonesRef.current = new Set(list); }).catch(() => {});
+    }, []);
 
     useEffect(() => {
         const scene = new THREE.Scene();
@@ -209,7 +226,8 @@ export default function App() {
         addNoEntryZone(-20, 0, 10, 8, 'noentry_west_side');
 
         const player = new THREE.Group();
-        player.position.set(0, 0, 15);
+        // 시작 위치: 시청 앞 광장 (어느 구역에도 속하지 않음)
+        player.position.set(0, 0, 8.5);
         playerRef.current = player;
         scene.add(player);
         lastValidPosRef.current.copy(player.position);
@@ -360,13 +378,7 @@ export default function App() {
                     const zoneOpen = zoneModal && !zoneModal.classList.contains('hidden');
                     // 존 이동 모달 처리
                     if (!zoneOpen && currZone !== nextZone && nextZone) {
-                        const issue = useSimStore.getState().issues[nextZone];
-                        pendingZoneRef.current = { key: nextZone, name: issue?.title ?? nextZone, proposed };
-                        const titleEl = document.getElementById('zone-title') as HTMLHeadingElement | null;
-                        const bodyEl = document.getElementById('zone-body') as HTMLParagraphElement | null;
-                        if (titleEl) titleEl.textContent = `${issue?.title ?? nextZone} 존으로 이동`;
-                        if (bodyEl) bodyEl.textContent = `${issue?.title ?? nextZone} 이슈 존으로 넘어가시겠습니까?`;
-                        zoneModal?.classList.remove('hidden');
+                        openZoneModal(nextZone, proposed);
                     } else if (!zoneOpen) {
                         // 충돌 처리: 전체 이동, 축 분리 대체 시도, 실패 시 정지
                         const nx = proposed.x; const nz = proposed.z;
@@ -636,10 +648,100 @@ export default function App() {
         });
     }
 
+    // 구역 모달: key가 있으면 잠긴 구역은 비밀번호 입력, 열린 구역은 이동 확인. key가 없으면 구역 고르기.
+    // proposed가 없으면(구역 열기 버튼으로 연 경우) 들어갈 때 시의원 앞으로 이동한다.
+    function openZoneModal(key: string | null, proposed: THREE.Vector3 | null) {
+        const modal = document.getElementById('zone-modal') as HTMLDivElement | null;
+        if (!modal) return;
+        const titleEl = document.getElementById('zone-title') as HTMLHeadingElement | null;
+        const bodyEl = document.getElementById('zone-body') as HTMLParagraphElement | null;
+        const input = document.getElementById('zone-password-input') as HTMLInputElement | null;
+        ['zone-confirm-area', 'zone-password-area', 'zone-picker-area', 'zone-password-error'].forEach((id) => document.getElementById(id)?.classList.add('hidden'));
+        let showId = 'zone-picker-area';
+        if (!key) {
+            pendingZoneRef.current = null;
+            if (titleEl) titleEl.textContent = '구역 열기';
+            if (bodyEl) bodyEl.textContent = '갈 구역을 고르세요. 잠긴 구역은 선생님이 알려 준 비밀번호가 필요해요.';
+            ZONE_KEYS.forEach((k) => {
+                const status = document.getElementById(`zone-pick-status-${k}`);
+                if (status) status.textContent = isZoneLocked(k) ? '🔒 잠김' : '열림';
+            });
+        } else {
+            const title = useSimStore.getState().issues[key]?.title ?? key;
+            const locked = isZoneLocked(key);
+            pendingZoneRef.current = { key, name: title, proposed, locked };
+            if (titleEl) titleEl.textContent = locked ? `🔒 ${title}` : `${title} 존으로 이동`;
+            if (bodyEl) bodyEl.textContent = locked ? '아직 잠긴 구역이에요. 선생님이 알려 준 비밀번호를 입력하세요.' : `${title} 이슈 존으로 넘어가시겠습니까?`;
+            showId = locked ? 'zone-password-area' : 'zone-confirm-area';
+        }
+        document.getElementById(showId)?.classList.remove('hidden');
+        modal.classList.remove('hidden');
+        if (showId === 'zone-password-area' && input) {
+            input.value = '';
+            setTimeout(() => input.focus(), 0);
+        }
+    }
+
+    function closeZoneModal(rollback: boolean) {
+        (document.getElementById('zone-modal') as HTMLDivElement | null)?.classList.add('hidden');
+        if (rollback) playerRef.current?.position.copy(lastValidPosRef.current);
+        pendingZoneRef.current = null;
+        setKey('w', false); setKey('a', false); setKey('s', false); setKey('d', false);
+    }
+
+    function enterZone(key: string, proposed: THREE.Vector3 | null) {
+        const player = playerRef.current;
+        if (!player) return;
+        if (proposed) {
+            player.position.copy(proposed);
+        } else {
+            const [x, z] = ZONE_ENTRY[key];
+            player.position.set(x, player.position.y, z);
+        }
+        lastValidPosRef.current.copy(player.position);
+        currentZoneRef.current = key;
+    }
+
+    function onPickZone(key: string) {
+        if (isZoneLocked(key)) {
+            openZoneModal(key, null);
+            return;
+        }
+        enterZone(key, null);
+        closeZoneModal(false);
+    }
+
+    async function onSubmitZonePassword() {
+        const info = pendingZoneRef.current;
+        const input = document.getElementById('zone-password-input') as HTMLInputElement | null;
+        const errorEl = document.getElementById('zone-password-error');
+        const btn = document.getElementById('zone-password-btn') as HTMLButtonElement | null;
+        if (!info || !input || !input.value.trim() || btn?.disabled) return;
+        if (btn) { btn.disabled = true; btn.textContent = '확인 중...'; }
+        errorEl?.classList.add('hidden');
+        let ok = false;
+        let networkError = false;
+        try { ok = await tryUnlockZone(info.key, input.value); } catch { networkError = true; }
+        if (btn) { btn.disabled = false; btn.textContent = '열기'; }
+        if (!ok) {
+            if (errorEl) {
+                errorEl.textContent = networkError ? '연결이 잠깐 끊겼어요. 다시 눌러 주세요.' : '비밀번호가 맞지 않아요. 다시 확인해 보세요.';
+                errorEl.classList.remove('hidden');
+            }
+            input.select();
+            return;
+        }
+        unlockedZonesRef.current.add(info.key);
+        try { sessionStorage.setItem(UNLOCKED_STORAGE_KEY, JSON.stringify([...unlockedZonesRef.current])); } catch {}
+        enterZone(info.key, info.proposed);
+        closeZoneModal(false);
+    }
+
     function handleInteraction(npc: any) {
         // 최신 스토어 상태를 직접 읽어 stale 클로저 문제 방지
         const { questsCompleted: qc, issues: iss, ordinanceDrafts: drafts, markQuestDone: markDone } = useSimStore.getState();
         const issueKey = npc.issueKey as string;
+        if (issueKey && isZoneLocked(issueKey)) return;
         if (npc.id.includes('councilor')) {
             const completed = qc[issueKey]?.size ?? 0;
             if (completed < 4) {
@@ -952,6 +1054,7 @@ export default function App() {
                         el.classList.toggle('hidden');
                         btn.textContent = el.classList.contains('hidden') ? '미션(열기)' : '미션(접기)';
                     }} className="mb-2 bg-green-700 hover:bg-green-600 px-3 py-1 rounded">미션(열기)</button>
+                    <button onClick={() => openZoneModal(null, null)} className="mb-2 ml-2 bg-amber-700 hover:bg-amber-600 px-3 py-1 rounded">🔑 구역 열기</button>
                     <div id="mission-panel" className="bg-black bg-opacity-50 p-4 rounded-lg max-w-md hidden">
                         <h3 className="font-bold mb-2">미션</h3>
                         <p>1) 시민들과 대화하여 4가지 문제에 대한 의견을 듣고</p>
@@ -995,28 +1098,40 @@ export default function App() {
                     <div className="ui-element bg-gray-800 border border-gray-600 p-6 rounded-xl shadow-lg max-w-sm w-full mx-4">
                         <h2 id="zone-title" className="text-2xl font-bold text-blue-300 mb-2">존 이동</h2>
                         <p id="zone-body" className="text-gray-300 mb-4">이슈 존으로 넘어가시겠습니까?</p>
-                        <div className="flex justify-end space-x-3">
+                        <div id="zone-confirm-area" className="flex justify-end space-x-3">
+                            <button onClick={() => closeZoneModal(true)} className="bg-gray-600 px-4 py-2 rounded hover:bg-gray-700">취소</button>
                             <button onClick={() => {
-                                const modal = document.getElementById('zone-modal') as HTMLDivElement;
-                                modal.classList.add('hidden');
-                                // 취소: 원위치로 롤백
-                                const player = playerRef.current!;
-                                player.position.copy(lastValidPosRef.current);
-                                // 이동키 해제
-                                setKey('w', false); setKey('a', false); setKey('s', false); setKey('d', false);
-                            }} className="bg-gray-600 px-4 py-2 rounded hover:bg-gray-700">취소</button>
-                            <button onClick={() => {
-                                const modal = document.getElementById('zone-modal') as HTMLDivElement;
-                                const info = (pendingZoneRef.current);
-                                if (info) {
-                                    const player = playerRef.current!;
-                                    player.position.copy(info.proposed);
-                                    lastValidPosRef.current.copy(player.position);
-                                    currentZoneRef.current = info.key;
-                                }
-                                pendingZoneRef.current = null;
-                                modal.classList.add('hidden');
+                                const info = pendingZoneRef.current;
+                                if (info) enterZone(info.key, info.proposed);
+                                closeZoneModal(false);
                             }} className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700">확인</button>
+                        </div>
+                        <div id="zone-password-area" className="hidden">
+                            <input id="zone-password-input" type="password" inputMode="numeric" autoComplete="off" maxLength={12}
+                                placeholder="비밀번호"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') { e.preventDefault(); onSubmitZonePassword(); }
+                                    if (e.key === 'Escape') closeZoneModal(true);
+                                }}
+                                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-2xl tracking-widest text-center focus:outline-none focus:border-blue-400" />
+                            <p id="zone-password-error" className="text-red-400 mt-2 hidden" />
+                            <div className="flex justify-end space-x-3 mt-4">
+                                <button onClick={() => closeZoneModal(true)} className="bg-gray-600 px-4 py-2 rounded hover:bg-gray-700">취소</button>
+                                <button id="zone-password-btn" onClick={onSubmitZonePassword} className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700">열기</button>
+                            </div>
+                        </div>
+                        <div id="zone-picker-area" className="hidden">
+                            <div className="grid grid-cols-2 gap-3">
+                                {ZONE_KEYS.map((k) => (
+                                    <button key={k} onClick={() => onPickZone(k)} className="bg-gray-700 hover:bg-gray-600 rounded-lg p-3 text-left">
+                                        <span className="block font-bold">{issues[k]?.title ?? k}</span>
+                                        <span id={`zone-pick-status-${k}`} className="block text-sm text-gray-300 mt-1" />
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="flex justify-end mt-4">
+                                <button onClick={() => closeZoneModal(false)} className="bg-gray-600 px-4 py-2 rounded hover:bg-gray-700">닫기</button>
+                            </div>
                         </div>
                     </div>
                 </div>

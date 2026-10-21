@@ -70,6 +70,21 @@ app.post('/api/judge', async (req, res) => {
   }
 });
 
+function readZonePasswords() {
+  try { return JSON.parse(process.env.ZONE_PASSWORDS || '{}') || {}; } catch { return {}; }
+}
+
+app.get('/api/unlock', (req, res) => res.json({ locked: Object.keys(readZonePasswords()) }));
+
+app.post('/api/unlock', async (req, res) => {
+  const { zone, password } = req.body || {};
+  const expected = readZonePasswords()[zone];
+  if (expected === undefined) return res.json({ ok: true });
+  const ok = String(password ?? '').trim() === String(expected);
+  if (!ok) await new Promise((r) => setTimeout(r, 800));
+  return res.json({ ok });
+});
+
 app.listen(PORT, () => {
   console.log(`[dev-api] listening on http://localhost:${PORT}`);
 });
